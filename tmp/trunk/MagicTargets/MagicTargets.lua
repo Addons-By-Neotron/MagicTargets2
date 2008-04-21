@@ -224,11 +224,11 @@ function mod:UpdateBars()
    end
    currentbars = bars:GetBars()
    if currentbars then
-      for id,name in pairs(seen) do
-	 if not currentbars[id] and not trivial[id] and not died[id] then
-	    currentbars[id] = bars:NewCounterBar(id, name, 100, 100)
-	 end
-      end
+--      for id,name in pairs(seen) do
+--	 if not currentbars[id] and not trivial[id] and not died[id] then
+--	    currentbars[id] = bars:NewCounterBar(id, name, 100, 100)
+--	 end
+--      end
       if next(currentbars) then
 	 for id in pairs(currentbars) do
 	    if  updated[id] or mmtargets[id] or seen[id] then
@@ -396,7 +396,7 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
       end
    end
    
-   if seen[tguid] or mmtargets[tguid] and not died[tguid] then
+   if not died[tguid] then
       -- This is on ze list of known npcs, and it's alive
       if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
 	 died[tguid] = true
