@@ -83,12 +83,15 @@ end
 local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 
 local defaults = {
-   growup = false,
-   locked = false,
-   mmlisten = true,
-   hideanchor = true,
-   outsidegroup = true,
+   profile = {
+      growup = false,
+      locked = false,
+      mmlisten = true,
+      hideanchor = true,
+      outsidegroup = true
+   }
 }
+
 function mod:OnInitialize()
    self.db = LibStub("AceDB-3.0"):New("MagicTargetsDB", defaults, "Default")
    self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
@@ -97,6 +100,7 @@ function mod:OnInitialize()
    self.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
 
    db = self.db.profile
+
    for i = 1,8 do
       raidicons[i] = iconPath:format(i)
    end
