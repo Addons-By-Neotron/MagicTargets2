@@ -1,6 +1,6 @@
 --[[
 **********************************************************************
-MagicTargets - a raid loot and DKP tracker.
+MagicTargets - Show the targets of the raid / party members.
 **********************************************************************
 This file is part of MagicTargets, a World of Warcraft Addon
 
@@ -10,21 +10,24 @@ the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
 MagicTargets is distributed in the hope that it will be useful, but
-WITHOUT ANY WARRANTY without even the implied warranty of
+WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
+
 **********************************************************************
 ]]
-
-MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0",
+-- 10:50 <@vhaarr> local ae = {}; AceLibrary("AceEvent-2.0"):embed(ae); ae:RegisterEvent("oRA_MainTankUpdate", function() --[[ update tanks ]] end)
+-- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
+-- 
+MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
 						"AceTimer-3.0", "LibLogger-1.0", "AceConsole-3.0")
 
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
-local currentbars = {}
+local currentbars
 local comm = LibStub("MagicComm-1.0")
 
 local UnitCreatureType = UnitCreatureType
@@ -42,8 +45,8 @@ local tremove = table.remove
 local ccspells
 local db
 local playerInCombat = false
- ccstrings = {}
- mobspells = {}
+local ccstrings = {}
+local  mobspells = {}
 local died = {}
 local seen = {}
 local mmtargets = {}
@@ -53,6 +56,7 @@ local trivial   = {}
 local bars 
 
 local tableStore = {}
+local options
 
 local colors = {
     tank = { [0] = 0, [1] = 0.8, [2] = 0.3 },
@@ -77,9 +81,21 @@ end
 
 local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 
+local defaults = {
+   growup = false,
+   locked = false,
+   mmlisten = true,
+   hideanchor = true,
+   outsidegroup = true,
+}
 function mod:OnInitialize()
-   MagicTargetsDB = MagicTargetsDB or get()
-   db = MagicTargetsDB
+   self.db = LibStub("AceDB-3.0"):New("MagicTargetsDB", defaults, "Default")
+   self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
+   self.db.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
+   self.db.RegisterCallback(self, "OnProfileDeleted","OnProfileChanged")
+   self.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
+
+   db = self.db.profile
    for i = 1,8 do
       raidicons[i] = iconPath:format(i)
    end
@@ -103,49 +119,59 @@ function mod:OnEnable()
       bars:SetFont(nil, 8)
       bars:SetColorAt(1.00, 1, 1, 0, 1)
       bars:SetColorAt(0.00, 0.3, 0.1,0, 1)
-      if db.point then
-	 bars:SetPoint(unpack(db.point))
-      else
-	 bars:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)
-      end
       bars.RegisterCallback(self, "AnchorClicked")
       bars:SetSortFunction(BarSortFunc)
    end
+
+   self:ApplyProfile()
+
    local tex = media:Fetch("statusbar", "Minimalist")	
    bars:SetTexture(tex)
-   comm:RegisterListener(self, "MM", true)
    self:SetLogLevel(self.logLevels.TRACE)
-   self:RegisterEvent("PLAYER_REGEN_ENABLED")
-   self:RegisterEvent("PLAYER_REGEN_DISABLED")
-   if InCombatLockdown() then
-      self:PLAYER_REGEN_DISABLED()
-   end
    self:RegisterEvent("RAID_ROSTER_UPDATE", "ScheduleGroupScan")
    self:RegisterEvent("PARTY_MEMBERS_CHANGED", "ScheduleGroupScan")
    self:ScheduleGroupScan()
 end
 
 function mod:OnDisable()
-   comm:UnregisterListener(self, "MM")
-   self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-   self:UnregisterEvent("PLAYER_REGEN_DISABLED")
    self:UnregisterEvent("RAID_ROSTER_UPDATE")
    self:UnregisterEvent("PARTY_MEMBERS_CHANGED")
-   self:PLAYER_REGEN_ENABLED()
 end
 
 do
-   local groupScanTimer
+   local groupScanTimer, addonEnabled
    function mod:ScheduleGroupScan()
       if groupScanTimer then self:CancelTimer(groupScanTimer, true) end
       groupScanTimer = self:ScheduleTimer("ScanGroupMembers", 5)
    end
 
    function mod:ScanGroupMembers()
-      for id in pairs(ingroup) do
-	 ingroup[id] = nil
+      for id in pairs(ingroup) do ingroup[id] = nil end
+      if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 or db.outsidegroup then
+	 mod:IterateRaid(function(self, unitname) ingroup[unitname] = true end)
+	 if not addonEnabled then 
+	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateBar", "target")
+	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
+	    self:RegisterEvent("PLAYER_REGEN_ENABLED")
+	    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+	    if db.mmlisten then comm:RegisterListener(self, "MM", true) end
+	    if InCombatLockdown() then
+	       self:PLAYER_REGEN_DISABLED()
+	    else
+	       self:PLAYER_REGEN_ENABLED()
+	    end
+	 end
+      elseif addonEnabled then
+	 addonEnabled = false
+	 self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	 self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+	 self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	 self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+	 self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
+	 comm:UnregisterListener(self, "MM")
+	 self:PLAYER_REGEN_ENABLED()
       end
-      mod:IterateRaid(function(self, unitname) ingroup[unitname] = true end)
    end
 end
 
@@ -156,6 +182,7 @@ local function GetRaidIcon(id)
 end 
 
 local function SetBarColor(bar,cc)
+   if not bar then return end
    local fade = 0.3 + 0.7 * (bar.value / bar.maxValue)
    local color = cc == 'Tank' and colors.tank or colors.cc
    bar.texture:SetVertexColor(color[0]*fade, color[1]*fade, color[2]*fade,1)
@@ -178,7 +205,7 @@ function mod:UpdateBar(target)
 	 bars:RemoveBar(guid)
 	 return
       end
-      
+      currentbars = currentbars or get()
       local bar = currentbars[guid]
       local mark = GetRaidTargetIndex(target)
       if not bar then
@@ -219,11 +246,13 @@ function mod:UpdateBars()
 	 end
       end
    end
-   if playerInCombat then
-      mod:IterateRaid(self.UpdateBar, true)
-   end
+   self:UpdateBar("focus")
+--   if playerInCombat then
+   mod:IterateRaid(self.UpdateBar, true)
+--   end
    currentbars = bars:GetBars()
    if currentbars then
+      -- uncomment this if the "seen" detection ever works correctly! >:-)
 --      for id,name in pairs(seen) do
 --	 if not currentbars[id] and not trivial[id] and not died[id] then
 --	    currentbars[id] = bars:NewCounterBar(id, name, 100, 100)
@@ -268,10 +297,8 @@ do
 	 end
       else
 	 if GetNumPartyMembers() > 0 then
-	    if target then 
-	       if not partytarget then partytarget = get() end
-	       map = partytarget
-	    end
+	    if not partytarget then partytarget = get() end
+	    map = partytarget
 	    for id = 1,GetNumPartyMembers() do
 	       if not map[id] then map[id] = "party"..id end
 	       callback(self, target and (map[id].."target") or UnitName(map[id]), ...)
@@ -285,6 +312,15 @@ end
 function mod:OnCommResetV2()
    for id in pairs(mmtargets) do
       mmtargets[id] = nil
+      bars:RemoveBar(id)
+   end
+   if not InCombatLockdown() then
+      currentBars = bars:GetBars()
+      if currentBars then
+	 for id in pairs(currentBars) do
+	    bars:RemoveBar(id)
+	 end
+      end
    end
    self:UpdateBars()
 end
@@ -321,7 +357,6 @@ function mod:AnchorClicked(cbk, group, button)
    db.point = {group:GetPoint()}
 end
 
-
 local repeatTimer
 
 function mod:PLAYER_REGEN_ENABLED()
@@ -329,7 +364,6 @@ function mod:PLAYER_REGEN_ENABLED()
       self:CancelTimer(repeatTimer, true)
       repeatTimer = nil
    end
-   self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
    currentbars = bars:GetBars()
    if currentbars then
       for guid in pairs(currentbars) do
@@ -347,14 +381,13 @@ function mod:PLAYER_REGEN_ENABLED()
    for id in pairs(seen) do seen[id] = nil end
    for id in pairs(trivial) do trivial[id] = nil end
    playerInCombat = false
+   if repeatTimer then self:CancelTimer(repeatTimer) end
+   repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
 end
 
 function mod:PLAYER_REGEN_DISABLED()
-   if repeatTimer then
-      self:CancelTimer(repeatTimer)
-   end
+   if repeatTimer then self:CancelTimer(repeatTimer) end
    repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 0.5)
-   self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
    playerInCombat = true
 end
 
@@ -427,3 +460,99 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
       end
    end
 end
+
+
+-- Config option handling below
+function mod:ApplyProfile()
+   -- configure based on saved data
+   if db.point then
+      bars:SetPoint(unpack(db.point))
+   else
+      bars:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)
+   end
+   bars:ReverseGrowth(db.growup)
+   if db.locked then bars:Lock() else bars:Unlock() end
+   if db.hideanchor and db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+--      self:SetLogLevel(db.logLevel)
+end
+
+function mod:OnProfileChanged(event, newdb)
+   if event ~= "OnProfileDeleted" then
+      db = self.db.profile
+      self:ApplyProfile()
+   end
+end
+
+
+options = { 
+   type = "group",
+   name = "Magic Targets",
+   handler = mod,
+   args = {
+      ["lock"] = {
+	 type = "toggle",
+	 name = "Lock or ulock the MT bars.",
+	 set = function()
+		  db.locked = not db.locked
+		  if db.locked then
+		     bars:Lock()
+		  else
+		     bars:Unlock()
+		  end
+		  if db.hideanchor then
+		     -- Show anchor if we're unlocked but lock it again if we're locked
+		     if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+		  end
+		  mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
+	       end,
+	 get = function() return db.locked end,
+      },
+      ["grow"] = {
+	 type = "toggle",
+	 name = "Grow bars upwards.",
+	 set = function()
+		  db.growup = not db.growup
+		  bars:ReverseGrowth(db.growup)
+		  mod:info("Growing bars %s.", db.growup and "up" or "down")
+	       end,
+	 get = function() return db.growup end
+      },
+      ["hideanchor"] = {
+	 type = "toggle",
+	 name = "Hide anchor when bars are locked.",
+	 set = function()
+		  db.hideanchor = not db.hideanchor
+		  if db.locked and db.hideanchor then
+		     bars:HideAnchor()
+		  else
+		     bars:ShowAnchor()
+		  end
+	       end,
+	 get = function() return db.hideanchor end
+      },
+      ["mmlisten"] = {
+	 type = "toggle",
+	 name = "Listen to Magic Marker target assignments.",
+	 set = function()
+		  db.mmlisten = not db.mmlisten
+		  if db.mmlisten then
+		     comm:RegisterListener(self, "MM", true)
+		  else
+		     comm:UnregisterListener(self, "MM")
+		  end
+	       end,
+	 get = function() return db.mmlisten end
+      },
+      ["outsidegroup"] = {
+	 type = "toggle",
+	 name = "Enable Magic Targets when not in a group.",
+	 set = function()
+		  db.outsidegroup = not db.outsidegroup
+		  mod:ScheduleGroupScan()
+	       end,
+	 get = function() return db.outsidegroup end
+      },
+   }
+}
+
+LibStub("AceConfig-3.0"):RegisterOptionsTable("MagicTargets", options, "magictargets")
