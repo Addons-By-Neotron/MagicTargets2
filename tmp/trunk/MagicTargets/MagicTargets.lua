@@ -180,7 +180,7 @@ do
    end
 end
 
-local function mod:RemoveAllBars(removeAll)
+function mod:RemoveAllBars(removeAll)
    currentBars = bars:GetBars()
    if currentBars then
       for id in pairs(currentBars) do
