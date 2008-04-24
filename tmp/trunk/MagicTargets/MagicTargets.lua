@@ -154,7 +154,8 @@ do
       for id in pairs(ingroup) do ingroup[id] = nil end
       if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 or db.outsidegroup then
 	 mod:IterateRaid(function(self, unitname) ingroup[unitname] = true end)
-	 if not addonEnabled then 
+	 if not addonEnabled then
+	    addonEnabled = true
 	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateBar", "target")
 	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
@@ -170,6 +171,7 @@ do
 	 end
       else
 	 if addonEnabled then
+	    addonEnabled = false
 	    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 	    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	    self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -543,6 +545,7 @@ options = {
 		  else
 		     bars:ShowAnchor()
 		  end
+		  mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
 	       end,
 	 get = function() return db.hideanchor end
       },
@@ -553,9 +556,12 @@ options = {
 		  db.mmlisten = not db.mmlisten
 		  if db.mmlisten then
 		     comm:RegisterListener(self, "MM", true)
+		     mod:info("Listening to Magic Marker comm events.")
 		  else
+		     mod:info("Not listening to Magic Marker comm events.")
 		     comm:UnregisterListener(self, "MM")
 		  end
+
 	       end,
 	 get = function() return db.mmlisten end
       },
@@ -565,6 +571,7 @@ options = {
 	 set = function()
 		  db.outsidegroup = not db.outsidegroup
 		  mod:ScheduleGroupScan()
+		  mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
 	       end,
 	 get = function() return db.outsidegroup end
       },
