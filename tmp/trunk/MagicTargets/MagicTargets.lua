@@ -42,6 +42,7 @@ local fmt = string.format
 local tinsert = table.insert
 local tremove = table.remove
 
+local addonEnabled = false
 local ccspells
 local db
 local playerInCombat = false
@@ -139,7 +140,7 @@ function mod:OnDisable()
 end
 
 do
-   local groupScanTimer, addonEnabled
+   local groupScanTimer
    function mod:ScheduleGroupScan()
       if groupScanTimer then self:CancelTimer(groupScanTimer, true) end
       groupScanTimer = self:ScheduleTimer("ScanGroupMembers", 5)
@@ -155,6 +156,7 @@ do
 	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
 	    self:RegisterEvent("PLAYER_REGEN_ENABLED")
 	    self:RegisterEvent("PLAYER_REGEN_DISABLED")
+	    self:ClearCombatData()
 	    if db.mmlisten then comm:RegisterListener(self, "MM", true) end
 	    if InCombatLockdown() then
 	       self:PLAYER_REGEN_DISABLED()
@@ -162,15 +164,29 @@ do
 	       self:PLAYER_REGEN_ENABLED()
 	    end
 	 end
-      elseif addonEnabled then
-	 addonEnabled = false
-	 self:UnregisterEvent("PLAYER_REGEN_ENABLED")
-	 self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-	 self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	 self:UnregisterEvent("PLAYER_TARGET_CHANGED")
-	 self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
-	 comm:UnregisterListener(self, "MM")
-	 self:PLAYER_REGEN_ENABLED()
+      else
+	 if addonEnabled then
+	    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+	    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
+	    self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+	    self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+	    self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
+	    comm:UnregisterListener(self, "MM")
+	    self:PLAYER_REGEN_ENABLED()
+	 end
+	 self:ClearCombatData()
+	 self:RemoveAllBars(true)
+      end
+   end
+end
+
+local function mod:RemoveAllBars(removeAll)
+   currentBars = bars:GetBars()
+   if currentBars then
+      for id in pairs(currentBars) do
+	 if removeAll or not mmtargets[id] then
+	    bars:RemoveBar(id)
+	 end
       end
    end
 end
@@ -312,15 +328,9 @@ end
 function mod:OnCommResetV2()
    for id in pairs(mmtargets) do
       mmtargets[id] = nil
-      bars:RemoveBar(id)
    end
    if not InCombatLockdown() then
-      currentBars = bars:GetBars()
-      if currentBars then
-	 for id in pairs(currentBars) do
-	    bars:RemoveBar(id)
-	 end
-      end
+      self:RemoveAllBars(true)
    end
    self:UpdateBars()
 end
@@ -364,15 +374,18 @@ function mod:PLAYER_REGEN_ENABLED()
       self:CancelTimer(repeatTimer, true)
       repeatTimer = nil
    end
-   currentbars = bars:GetBars()
-   if currentbars then
-      for guid in pairs(currentbars) do
-	 if not mmtargets[guid] then
-	    bars:RemoveBar(guid)
-	 end
-      end
+   mod:RemoveAllBars()
+   self:ClearCombatData()
+   playerInCombat = false
+   if addonEnabled then
+      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
    end
-   for id in pairs(died) do died[id] = nil end
+end
+
+function mod:ClearCombatData()
+   for id in pairs(died) do
+      died[id] = nil
+   end
    for id in pairs(ccstrings) do ccstrings[id] = nil end
    for id,data in pairs(mobspells) do
       del(data)
@@ -380,14 +393,13 @@ function mod:PLAYER_REGEN_ENABLED()
    end
    for id in pairs(seen) do seen[id] = nil end
    for id in pairs(trivial) do trivial[id] = nil end
-   playerInCombat = false
-   if repeatTimer then self:CancelTimer(repeatTimer) end
-   repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
 end
 
 function mod:PLAYER_REGEN_DISABLED()
    if repeatTimer then self:CancelTimer(repeatTimer) end
-   repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 0.5)
+   if addonEnabled then
+      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 0.5)
+   end
    playerInCombat = true
 end
 
