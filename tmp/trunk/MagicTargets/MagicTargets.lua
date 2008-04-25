@@ -264,7 +264,9 @@ function mod:UpdateBars()
 	       bar:SetIcon(GetRaidIcon(data.mark))
 	       bar.mark = data.mark
 	    end
-	    bar.label:SetText(data.cc and fmt("%s (%s)", data.name, data.cc) or data.name)
+	    if data.name then
+	       bar.label:SetText(data.cc and fmt("%s (%s)", data.name, data.cc) or data.name)
+	    end
 	 end
       end
    end
@@ -447,7 +449,7 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
       end
    end
    
-   if not died[tguid] and (event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED") then
+   if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
       died[tguid] = true
       bars:RemoveBar(tguid)
    end
