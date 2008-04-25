@@ -447,12 +447,9 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
       end
    end
    
-   if not died[tguid] then
-      -- This is on ze list of known npcs, and it's alive
-      if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
-	 died[tguid] = true
-	 bars:RemoveBar(tguid)
-      end
+   if not died[tguid] and (event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED") then
+      died[tguid] = true
+      bars:RemoveBar(tguid)
    end
    if event == "SPELL_AURA_APPLIED" then
       -- record crowd control
@@ -509,7 +506,7 @@ options = {
    args = {
       ["lock"] = {
 	 type = "toggle",
-	 name = "Lock or ulock the MT bars.",
+	 name = "Lock or unlock the MT bars.",
 	 set = function()
 		  db.locked = not db.locked
 		  if db.locked then
