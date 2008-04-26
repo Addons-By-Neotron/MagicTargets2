@@ -47,7 +47,7 @@ local time = time
 
 local addonEnabled = false
 local ccspells
-local db
+local db, isInGroup, inCombat
 local ccstrings = {}
 local mobspells = {}
 local died = {}
@@ -64,8 +64,10 @@ local tableStore = {}
 local options
 
 local colors = {
-   tank = { [0] = 0, [1] = 0.8, [2] = 0.3 },
-   cc   = { [0] = 0, [1] = 0.7, [2] = 0.9 }
+   Tank    = { [0] = 0, [1] = 0.8, [2] = 0.3 },
+   CC      = { [0] = 0, [1] = 0.7, [2] = 0.9 },
+   Notank  = { [0] = 1, [1] = 0,   [2] = 0   },
+   Normal  = { [0] = 1, [1] = 1,   [2] = 0   }
 }
    
 
@@ -136,7 +138,7 @@ function mod:OnEnable()
    if not bars then
       bars = self:NewBarGroup("Magic Targets",nil,  db.width, db.height)
       bars:SetColorAt(1.00, 1, 1, 0, 1)
-      bars:SetColorAt(0.00, 0.3, 0.1,0, 1)
+      bars:SetColorAt(0.00, 0.5, 0.5,0, 1)
       bars.RegisterCallback(self, "AnchorClicked")
       bars:SetSortFunction(BarSortFunc)
 
@@ -176,6 +178,40 @@ function mod:OnDisable()
    self:UnregisterEvent("RAID_ROSTER_UPDATE")
    self:UnregisterEvent("PARTY_MEMBERS_CHANGED")
 end
+local unitTanks = {}
+do
+   local tankAura = {
+      PALADIN = { [GetSpellInfo(25780)] = true },
+      WARRIOR = { [GetSpellInfo(71)] = true  },
+      DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }
+   }
+
+   local UnitBuff = UnitBuff
+   function mod:IsTank(unit)
+      local name = UnitName(unit)
+      if unitTanks[name] ~= nil then
+	 return unitTanks[name]
+      end
+      local _,class = UnitClass(unit)
+      local auras = tankAura[class]
+      if not auras then
+--	 mod:debug("Found no auras for class %s", class)
+	 unitTanks[name] = false
+	 return false
+      end
+      for i = 1,40 do
+	 local buff = UnitBuff(unit, i) 
+	 if not buff then break end
+--	 mod:debug("Scanning: Found %s (%s)", buff, tostring(auras[buff]))
+	 if auras[buff] then
+	    unitTanks[name] = true
+	    return true
+	 end
+      end
+      unitTanks[name] = false
+      return false
+   end
+end
 
 do
    local groupScanTimer
@@ -186,7 +222,12 @@ do
 
    function mod:ScanGroupMembers()
       for id in pairs(ingroup) do ingroup[id] = nil end
-      if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 or db.outsidegroup then
+      if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 then
+	 isInGroup = true
+      else
+	 isInGroup = false
+      end
+      if isInGroup or db.outsidegroup then
 	 mod:IterateRaid(function(self, unitname) ingroup[unitname] = true end)
 	 if not addonEnabled then
 	    addonEnabled = true
@@ -255,15 +296,16 @@ function mod:RemoveAllBars(removeAll)
 end
 
 local updated = {}
-
+local tanked  = {}
 local function GetRaidIcon(id)
    if id and id > 0 and id <= 8 then return raidicons[id] end
 end 
 
 local function SetBarColor(bar,cc)
    if not bar or not cc then return end
-   local fade = 0.3 + 0.7 * (bar.value / bar.maxValue)
-   local color = cc == 'Tank' and colors.tank or colors.cc
+   local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
+   local color = colors[cc] or colors["CC"]
+   mod:debug("Setting bar color to %s", cc)
    bar.texture:SetVertexColor(color[0]*fade, color[1]*fade, color[2]*fade,1)
 end
 
@@ -278,7 +320,8 @@ function mod:UpdateBar(target)
    end
    local type = UnitCreatureType(target)
    if UnitCanAttack("player", target) and not UnitIsDead(target)
-      and not UnitPlayerControlled(target)  and not UnitIsPlayer(target) then
+      and not ingroup[unitname] and not UnitPlayerControlled(target) then
+	 -- and not UnitIsPlayer(target) then
       if type == "Critter" or type == "Totem"  then
 	 trivial[guid] = true
 	 self:RemoveBar(guid)
@@ -298,9 +341,17 @@ function mod:UpdateBar(target)
 	    bar.mark = mark
 	 end
       end
+      target = target.."target"
       
+      if UnitExists(target) and not UnitCanAttack("player", target) and
+	 not UnitIsDead(target) and UnitIsPlayer(target) then
+	 tanked[guid] = mod:IsTank(target)
+      end
+
       if mmtargets[guid] then
-	 SetBarColor(bar, mmtargets[guid].cc)
+	 if not inCombat then
+	    SetBarColor(bar, mmtargets[guid].cc)
+	 end
 	 mmtargets[guid].mark = mark
       end
       updated[guid] = 1
@@ -310,9 +361,11 @@ end
 
 function mod:UpdateBars()
    local tt = time()
+   inCombat = InCombatLockdown()
    currentbars = bars:GetBars() or get()
    for id in pairs(updated) do updated[id] = nil end
-   
+   for id in pairs(unitTanks) do unitTanks[id] = nil end
+   for id in pairs(tanked) do tanked[id] = nil end
    for id,data in pairs(mmtargets) do
       if not died[id] then
 	 local bar = currentbars[id]
@@ -331,9 +384,8 @@ function mod:UpdateBars()
       end
    end
    self:IterateRaid(self.UpdateBar, true)
-
+   self:UpdateBar("pettarget")
    currentbars = bars:GetBars()
-   local inCombat = InCombatLockdown()
    if currentbars and next(currentbars) then
       for id,seenTime in pairs(seen) do
 	 if seenTime < tt then
@@ -349,16 +401,31 @@ function mod:UpdateBars()
 	    end
 	 end
       end
-      for id in pairs(currentbars) do
+      for id,bar in pairs(currentbars) do
 	 if  updated[id] or mmtargets[id] or seen[id] then
-	    if mobspells[id] and not ccstrings[id] then
-	       local str = " "
-	       for _,tex in pairs(mobspells[id]) do
-		  str = fmt("%s|T%s:0|t", str, tex)
+	    if mobspells[id] then
+	       if not ccstrings[id] then
+		  local str = " "
+		  for _,tex in pairs(mobspells[id]) do
+		     str = fmt("%s|T%s:0|t", str, tex)
+		  end
+		  ccstrings[id] = str
 	       end
-	       ccstrings[id] = str
+	       SetBarColor(bar, "CC") 
+	    elseif inCombat then
+	       if inGroup then
+		  if tanked[id] then
+		     SetBarColor(bar, "Tank")
+		  elseif tanked[id] == false then
+		     SetBarColor(bar, "Notank")
+		  else
+		     SetBarColor(bar, "Normal")
+		  end
+	       else
+		  SetBarColor(bar, "Tank")
+	       end
 	    end
-	    currentbars[id].timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
+	    bar.timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
 	 else
 	    self:RemoveBar(id)	
 	 end
