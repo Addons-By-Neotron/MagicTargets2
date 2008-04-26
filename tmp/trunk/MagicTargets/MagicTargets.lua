@@ -25,6 +25,8 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
 						"AceTimer-3.0", "LibLogger-1.0", "AceConsole-3.0")
 
+local C = LibStub("AceConfigDialog-3.0")
+local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
 local currentbars
@@ -85,10 +87,15 @@ local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 local defaults = {
    profile = {
       growup = false,
+      font = "Friz Quadrata TT",
       locked = false,
       mmlisten = true,
       hideanchor = true,
-      outsidegroup = true
+      outsidegroup = true, 
+      texture =  "Minimalist",
+      fontsize = 8,
+      width = 150,
+      height = 12,
    }
 }
 
@@ -98,8 +105,11 @@ function mod:OnInitialize()
    self.db.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
    self.db.RegisterCallback(self, "OnProfileDeleted","OnProfileChanged")
    self.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
-
+   MagicTargetsDB.point = nil
    db = self.db.profile
+
+   options.args.profile = DBOpt:GetOptionsTable(self.db)
+
 
    for i = 1,8 do
       raidicons[i] = iconPath:format(i)
@@ -120,8 +130,7 @@ end
 
 function mod:OnEnable()
    if not bars then
-      bars = self:NewBarGroup("Magic Targets",nil,  150, 12)
-      bars:SetFont(nil, 8)
+      bars = self:NewBarGroup("Magic Targets",nil,  db.width, db.height)
       bars:SetColorAt(1.00, 1, 1, 0, 1)
       bars:SetColorAt(0.00, 0.3, 0.1,0, 1)
       bars.RegisterCallback(self, "AnchorClicked")
@@ -129,13 +138,18 @@ function mod:OnEnable()
    end
 
    self:ApplyProfile()
-
-   local tex = media:Fetch("statusbar", "Minimalist")	
-   bars:SetTexture(tex)
    self:SetLogLevel(self.logLevels.TRACE)
    self:RegisterEvent("RAID_ROSTER_UPDATE", "ScheduleGroupScan")
    self:RegisterEvent("PARTY_MEMBERS_CHANGED", "ScheduleGroupScan")
    self:ScheduleGroupScan()
+end
+
+function mod:SetTexture()
+   bars:SetTexture(media:Fetch("statusbar", db.texture))
+end
+
+function mod:SetFont()
+   bars:SetFont(media:Fetch("font", db.font), db.fontsize)
 end
 
 function mod:OnDisable()
@@ -517,6 +531,16 @@ end
 
 
 -- Config option handling below
+
+function GetMediaList(type)
+   local arrlist = media:List(type)
+   local keylist = {}
+   for _,val in pairs(arrlist) do
+      keylist[val] = val
+   end
+   return keylist
+end
+
 function mod:ApplyProfile()
    -- configure based on saved data
    if db.point then
@@ -528,6 +552,24 @@ function mod:ApplyProfile()
    if db.locked then bars:Lock() else bars:Unlock() end
    if db.hideanchor and db.locked then bars:HideAnchor() else bars:ShowAnchor() end
 --      self:SetLogLevel(db.logLevel)
+   self:SetTexture()
+   self:SetFont()
+   self:SetSize()
+   bars:SortBars()
+end
+
+function mod:SetSize()
+   local currentBars = bars:GetBars()
+   bars:SetWidth(db.width)
+   bars:SetHeight(db.height)
+   if currentBars then
+      for id, bar in pairs(currentbars) do
+	 bar:SetHeight(db.height)
+	 bar.icon:SetHeight(db.height)
+	 bar.icon:SetWidth(db.height)
+      end
+      bars:SortBars()
+   end
 end
 
 function mod:OnProfileChanged(event, newdb)
@@ -535,83 +577,202 @@ function mod:OnProfileChanged(event, newdb)
       db = self.db.profile
       self:ApplyProfile()
    end
+   self:SetStatusText(string.format("Active profile: %s", self.db:GetCurrentProfile()))
 end
 
+function mod:ToggleConfigDialog()
+   if C.OpenFrames["Magic Targets"] then
+      C:Close("Magic Targets")
+   else
+      C:Open("Magic Targets")
+      self:SetStatusText(string.format("Active profile: %s", self.db:GetCurrentProfile()))
+   end
+end
+
+do
+   local updateStatusTimer
+   function mod:SetStatusText(text, update)
+      local frame = C.OpenFrames["Magic Targets"]
+      if frame then
+	 frame:SetStatusText(text)
+	 if updateStatusTimer then self:CancelTimer(updateStatusTimer, true) end
+	 if update then
+	    updateStatustimer = self:ScheduleTimer("SetStatusText", 10, string.format("Active profile: %s", self.db:GetCurrentProfile()))
+	 else
+	    updateStatustimer = false 
+	 end
+      end
+   end
+end
 
 options = { 
    type = "group",
    name = "Magic Targets",
    handler = mod,
    args = {
-      ["lock"] = {
-	 type = "toggle",
-	 name = "Lock or unlock the MT bars.",
-	 set = function()
-		  db.locked = not db.locked
-		  if db.locked then
-		     bars:Lock()
-		  else
-		     bars:Unlock()
-		  end
-		  if db.hideanchor then
-		     -- Show anchor if we're unlocked but lock it again if we're locked
-		     if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
-		  end
-		  mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
-	       end,
-	 get = function() return db.locked end,
-      },
-      ["grow"] = {
-	 type = "toggle",
-	 name = "Grow bars upwards.",
-	 set = function()
-		  db.growup = not db.growup
-		  bars:ReverseGrowth(db.growup)
-		  mod:info("Growing bars %s.", db.growup and "up" or "down")
-	       end,
-	 get = function() return db.growup end
-      },
-      ["hideanchor"] = {
-	 type = "toggle",
-	 name = "Hide anchor when bars are locked.",
-	 set = function()
-		  db.hideanchor = not db.hideanchor
-		  if db.locked and db.hideanchor then
-		     bars:HideAnchor()
-		  else
-		     bars:ShowAnchor()
-		  end
-		  mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
-	       end,
-	 get = function() return db.hideanchor end
-      },
-      ["mmlisten"] = {
-	 type = "toggle",
-	 name = "Listen to Magic Marker target assignments.",
-	 set = function()
-		  db.mmlisten = not db.mmlisten
-		  if db.mmlisten then
-		     comm:RegisterListener(mod, "MM", true)
-		     mod:info("Listening to Magic Marker comm events.")
-		  else
-		     mod:info("Not listening to Magic Marker comm events.")
-		     comm:UnregisterListener(mod, "MM")
-		  end
+      config = {
+	 type = "execute",
+	 name = "Toggle configuration dialog",
+	 func = "ToggleConfigDialog",
+	 dialogHidden = true
+      }, 
+      general = {
+	 type = "group",
+	 name = "General",
+	 order = 1,
+	 args = {
+	    ["lock"] = {
+	       type = "toggle",
+	       name = "Lock or unlock the MT bars.",
+	       width = "full",
+	       set = function()
+			db.locked = not db.locked
+			if db.locked then
+			   bars:Lock()
+			else
+			   bars:Unlock()
+			end
+			if db.hideanchor then
+			   -- Show anchor if we're unlocked but lock it again if we're locked
+			   if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+			end
+			mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
+		     end,
+	       get = function() return db.locked end,
+	    },
+	    ["grow"] = {
+	       type = "toggle",
+	       name = "Grow bars upwards.",
+	       width = "full",
+	       set = function()
+			db.growup = not db.growup
+			bars:ReverseGrowth(db.growup)
+			mod:info("Growing bars %s.", db.growup and "up" or "down")
+		     end,
+	       get = function() return db.growup end
+	    },
+	    ["hideanchor"] = {
+	       type = "toggle",
+	       name = "Hide anchor when bars are locked.",
+	       width = "full",	
+	       set = function()
+			db.hideanchor = not db.hideanchor
+			if db.locked and db.hideanchor then
+			   bars:HideAnchor()
+			else
+			   bars:ShowAnchor()
+			end
+			mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
+		     end,
+	       get = function() return db.hideanchor end
+	    },
+	    ["mmlisten"] = {
+	       type = "toggle",
+	       name = "Listen to Magic Marker target assignments.",
+	       width = "full",
+	       set = function()
+			db.mmlisten = not db.mmlisten
+			if db.mmlisten then
+			   comm:RegisterListener(mod, "MM", true)
+			   mod:info("Listening to Magic Marker comm events.")
+			else
+			   mod:info("Not listening to Magic Marker comm events.")
+			   comm:UnregisterListener(mod, "MM")
+			end
 
-	       end,
-	 get = function() return db.mmlisten end
+		     end,
+	       get = function() return db.mmlisten end
+	    },
+	    ["outsidegroup"] = {
+	       type = "toggle",
+	       name = "Enable Magic Targets when not in a group.",
+	       width = "full",
+	       set = function()
+			db.outsidegroup = not db.outsidegroup
+			mod:ScheduleGroupScan()
+			mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
+		     end,
+	       get = function() return db.outsidegroup end
+	    },
+	 },
       },
-      ["outsidegroup"] = {
-	 type = "toggle",
-	 name = "Enable Magic Targets when not in a group.",
-	 set = function()
-		  db.outsidegroup = not db.outsidegroup
-		  mod:ScheduleGroupScan()
-		  mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
-	       end,
-	 get = function() return db.outsidegroup end
+      texture = {
+	 type = "group",
+	 name = "Texture",
+	 order = 2,
+	 args = {
+	    ["texture"] = {
+	       type = "multiselect",
+	       name = "Texture",
+	       values = GetMediaList("statusbar"),
+	       set = function(_,val, state)
+			if val ~= db.texture and state then
+			   db.texture = val
+			end
+			mod:SetTexture()
+		     end,
+	       get = function(_,key) return db.texture == key end
+	    },
+	 }
       },
+      sizing = {
+	 type = "group",
+	 name = "Bar Size",
+	 order = 4,
+	 args = {
+	    height = {
+	       type = "range",
+	       name = "Height",
+	       width = "full",
+	       min = 1, max = 50, step = 1,
+	       set = function(_,val) db.height = val mod:SetSize() end,
+	       get = function() return db.height end
+	    }, 
+	    width = {
+	       type = "range",
+	       name = "Width",
+	       width = "full",
+	       min = 1, max = 300, step = 1,
+	       set = function(_,val) db.width = val mod:SetSize() end,
+	       get = function() return db.width end
+	    }, 
+	    maxbars = {
+	       type = "range",
+	       name = "Max number of bars",
+	       min = 0, max = 30, step = 1,
+	       set = function(_,val) db.maxbars = val mod:SetSize() end,
+	       get = function() return db.maxbars end,
+	       hidden = true,
+	    }, 
+	 }
+      },
+      font = {
+	 type = "group",
+	 name = "Font",
+	 order = 3,
+	 args = {
+	    ["fontname"] = {
+	       type = "multiselect",
+	       name = "Font",
+	       values = GetMediaList("font"),
+	       set = function(_,val, state)
+			if val ~= db.font and state then
+			   db.font = val
+			   mod:SetFont()
+			end
+		     end,
+	       get = function(_,key) return db.font == key end
+	    },
+	    ["fontsize"] = {
+	       type = "range",
+	       name = "Font size",
+	       min = 1, max = 30, step = 1,
+	       set = function(_,val) db.fontsize = val mod:SetFont() end,
+	       get = function() return db.fontsize end
+	    },
+	 },
+      }
    }
 }
-
-LibStub("AceConfig-3.0"):RegisterOptionsTable("MagicTargets", options, "magictargets")
+LibStub("AceConfig-3.0"):RegisterOptionsTable("Magic Targets", options, {"magictargets", "mgt"})
+self.optFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Magic Targets", "Magic Targets")
