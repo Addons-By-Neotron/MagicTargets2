@@ -41,20 +41,20 @@ local GetRaidTargetIndex = GetRaidTargetIndex
 local fmt = string.format
 local tinsert = table.insert
 local tremove = table.remove
+local time = time
 
 local addonEnabled = false
 local ccspells
 local db
-local playerInCombat = false
 local ccstrings = {}
-local  mobspells = {}
+local mobspells = {}
 local died = {}
-local seen = {}
-local mmtargets = {}
+ seen = {}
+ mmtargets = {}
 local raidicons = {}
 local ingroup   = {}
 local trivial   = {}
-local bars 
+ bars  = nil
 
 local tableStore = {}
 local options
@@ -186,12 +186,20 @@ do
    end
 end
 
+function mod:RemoveBar(id)
+   local bar = bars:GetBar(id)
+   bar.mark = nil
+   seen[id] = nil
+   bars:RemoveBar(id)
+end
+
+
 function mod:RemoveAllBars(removeAll)
    currentBars = bars:GetBars()
    if currentBars then
-      for id in pairs(currentBars) do
+      for id,bar in pairs(currentBars) do
 	 if removeAll or not mmtargets[id] then
-	    bars:RemoveBar(id)
+	    mod:RemoveBar(id)
 	 end
       end
    end
@@ -204,7 +212,7 @@ local function GetRaidIcon(id)
 end 
 
 local function SetBarColor(bar,cc)
-   if not bar then return end
+   if not bar or not cc then return end
    local fade = 0.3 + 0.7 * (bar.value / bar.maxValue)
    local color = cc == 'Tank' and colors.tank or colors.cc
    bar.texture:SetVertexColor(color[0]*fade, color[1]*fade, color[2]*fade,1)
@@ -224,7 +232,7 @@ function mod:UpdateBar(target)
       and not UnitPlayerControlled(target)  and not UnitIsPlayer(target) then
       if type == "Critter" or type == "Totem"  then
 	 trivial[guid] = true
-	 bars:RemoveBar(guid)
+	 self:RemoveBar(guid)
 	 return
       end
       currentbars = currentbars or get()
@@ -232,7 +240,7 @@ function mod:UpdateBar(target)
       local mark = GetRaidTargetIndex(target)
       if not bar then
 	 bar = bars:NewCounterBar(guid, UnitName(target), UnitHealth(target), UnitHealthMax(target), GetRaidIcon(mark))
-	 mark = mark
+	 bar.mark = mark
 	 currentbars[guid] = bar
       else
 	 bar:SetValue(UnitHealth(target))
@@ -242,14 +250,16 @@ function mod:UpdateBar(target)
 	 end
       end
       
-      if mmtargets[guid] and mmtargets[guid].cc then
+      if mmtargets[guid] then
 	 SetBarColor(bar, mmtargets[guid].cc)
       end
       updated[guid] = 1
+      seen[guid]    = time()+4
    end
 end
 
 function mod:UpdateBars()
+   local tt = time()
    currentbars = bars:GetBars() or get()
    for id in pairs(updated) do updated[id] = nil end
    
@@ -259,7 +269,7 @@ function mod:UpdateBars()
 	 if not bar then
 	    local bar = bars:NewCounterBar(id, data.cc and fmt("%s (%s)", data.name, data.cc) or data.name, 100, 100, GetRaidIcon(data.mark))
 	    bar.mark = data.mark
-	 else
+	 else	    
 	    if bar.mark ~= data.mark then
 	       bar:SetIcon(GetRaidIcon(data.mark))
 	       bar.mark = data.mark
@@ -271,32 +281,42 @@ function mod:UpdateBars()
       end
    end
    self:UpdateBar("focus")
---   if playerInCombat then
-   mod:IterateRaid(self.UpdateBar, true)
---   end
+   self:IterateRaid(self.UpdateBar, true)
+
    currentbars = bars:GetBars()
-   if currentbars then
-      -- uncomment this if the "seen" detection ever works correctly! >:-)
---      for id,name in pairs(seen) do
---	 if not currentbars[id] and not trivial[id] and not died[id] then
---	    currentbars[id] = bars:NewCounterBar(id, name, 100, 100)
---	 end
---      end
-      if next(currentbars) then
-	 for id in pairs(currentbars) do
-	    if  updated[id] or mmtargets[id] or seen[id] then
-	       if mobspells[id] and not ccstrings[id] then
-		  local str = " "
-		  for _,tex in pairs(mobspells[id]) do
-		     str = fmt("%s|T%s:0|t", str, tex)
-		  end
-		  ccstrings[id] = str
+   local inCombat = InCombatLockdown()
+   if currentbars and next(currentbars) then
+      for id,seenTime in pairs(seen) do
+	 if seenTime < tt then
+	    local bar = currentbars[id]
+	    if bar and mmtargets[id] then
+	       if not inCombat then 
+		  bar:SetValue(100)
+		  SetBarColor(bar, mmtargets[id].cc)
+		  seen[id] = nil
 	       end
-	       currentbars[id].timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
 	    else
-	       bars:RemoveBar(id)	
+	       seen[id] = nil
 	    end
 	 end
+      end
+      for id in pairs(currentbars) do
+	 if  updated[id] or mmtargets[id] or seen[id] then
+	    if mobspells[id] and not ccstrings[id] then
+	       local str = " "
+	       for _,tex in pairs(mobspells[id]) do
+		  str = fmt("%s|T%s:0|t", str, tex)
+	       end
+	       ccstrings[id] = str
+	    end
+	    currentbars[id].timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
+	 else
+	    self:RemoveBar(id)	
+	 end
+      end
+   else
+      for id in pairs(seen) do
+	 seen[id] = nil -- no bars so reset this
       end
    end
    bars:SortBars()
@@ -347,9 +367,10 @@ function mod:OnAssignData(data)
    mmtargets = data
    self:UpdateBars()
    for id,data in pairs(mmtargets) do
-      if data.cc then
-	 SetBarColor(bars:GetBar(id), data.cc)
-      end
+      --      mod:debug("Received mmtarget(%s) => %s, %s (%d)", id, data.name, data.cc, data.mark)
+      local bar = bars:GetBar(id)
+      SetBarColor(bar, data.cc)
+      bar.mark = data.mark
    end
 end
 
@@ -381,12 +402,13 @@ function mod:PLAYER_REGEN_ENABLED()
    if repeatTimer then
       self:CancelTimer(repeatTimer, true)
       repeatTimer = nil
+      mod:debug("Unscheduling timer.")
    end
    mod:RemoveAllBars()
    self:ClearCombatData()
-   playerInCombat = false
    if addonEnabled then
       repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
+      mod:debug("Scheduling 5 second repeating timer.")
    end
 end
 
@@ -399,16 +421,20 @@ function mod:ClearCombatData()
       del(data)
       mobspells[id] = nil
    end
-   for id in pairs(seen) do seen[id] = nil end
+--   for id in pairs(seen) do seen[id] = nil end
    for id in pairs(trivial) do trivial[id] = nil end
 end
 
 function mod:PLAYER_REGEN_DISABLED()
-   if repeatTimer then self:CancelTimer(repeatTimer) end
+   if repeatTimer then
+      self:CancelTimer(repeatTimer, true)
+      repeatTimer = nil
+      mod:debug("Unscheduling timer.")
+   end 
    if addonEnabled then
       repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 0.5)
+      mod:debug("Scheduling 0.5 second repeating timer.")
    end
-   playerInCombat = true
 end
 
 local bit_band = bit.band
@@ -421,7 +447,7 @@ local function GetFlagInfo(flags)
    bit_band(flags, COMBATLOG_OBJECT_REACTION_FRIENDLY) ~= 0 -- is friendly
 end
 
-function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
+function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
 					 tguid, tname, tflags, spellid, spellname)
    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
    local tinGroup, tisPlayer, tisFriend = GetFlagInfo(tflags)
@@ -438,20 +464,18 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, _, event, sguid, sname, sflags,
 
    -- This stuff here is meant to detect new mobs we're engaged with.
    if sisfriend and (tisnpc and not tispet) then
-      if tguid and tname and not seen[tguid] and sname and ingroup[sname] then
---	 mod:trace("Recording %s as seen.", tname)
-	 seen[tguid] = tname
+      if tguid and tname and sname and ingroup[sname] then
+	 seen[tguid] = tt+4
       end
    elseif tisfriend and (sisnpc and not sispet) then
-      if sguid and sname and not seen[sguid] and tname and ingroup[tname] then
---	 mod:trace("Recording %s as seen.", sname)
-	 seen[sguid] = sname
+      if sguid and sname and tname and ingroup[tname] then
+	 seen[sguid] = tt+4
       end
    end
    
    if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
       died[tguid] = true
-      bars:RemoveBar(tguid)
+      self:RemoveBar(tguid)
    end
    if event == "SPELL_AURA_APPLIED" then
       -- record crowd control
@@ -554,11 +578,11 @@ options = {
 	 set = function()
 		  db.mmlisten = not db.mmlisten
 		  if db.mmlisten then
-		     comm:RegisterListener(self, "MM", true)
+		     comm:RegisterListener(mod, "MM", true)
 		     mod:info("Listening to Magic Marker comm events.")
 		  else
 		     mod:info("Not listening to Magic Marker comm events.")
-		     comm:UnregisterListener(self, "MM")
+		     comm:UnregisterListener(mod, "MM")
 		  end
 
 	       end,
