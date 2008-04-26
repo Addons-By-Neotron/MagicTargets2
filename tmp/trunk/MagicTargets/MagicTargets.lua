@@ -188,9 +188,11 @@ end
 
 function mod:RemoveBar(id)
    local bar = bars:GetBar(id)
-   bar.mark = nil
-   seen[id] = nil
-   bars:RemoveBar(id)
+   if bar then
+      bar.mark = nil
+      seen[id] = nil
+      bars:RemoveBar(id)
+   end
 end
 
 
@@ -252,6 +254,7 @@ function mod:UpdateBar(target)
       
       if mmtargets[guid] then
 	 SetBarColor(bar, mmtargets[guid].cc)
+	 mmtargets[guid].mark = mark
       end
       updated[guid] = 1
       seen[guid]    = time()+4
@@ -367,10 +370,8 @@ function mod:OnAssignData(data)
    mmtargets = data
    self:UpdateBars()
    for id,data in pairs(mmtargets) do
-      --      mod:debug("Received mmtarget(%s) => %s, %s (%d)", id, data.name, data.cc, data.mark)
       local bar = bars:GetBar(id)
       SetBarColor(bar, data.cc)
-      bar.mark = data.mark
    end
 end
 
@@ -378,6 +379,18 @@ function mod:OnCommMarkV2(mark, guid, _, name)
    if not name then return end
    if not mmtargets[guid] then
       mmtargets[guid] = get()
+   end
+   currentbars = bars:GetBars()
+   if currentbars then
+      for id, bar in pairs(currentbars) do
+	 if id ~=guid and bar.mark == mark then
+	    bar:SetIcon(nil)
+	    bar.mark = nil
+	    if mmtargets[id] then
+	       mmtargets[id].mark = nil
+	    end
+	 end
+      end
    end
    mmtargets[guid].name = name
    mmtargets[guid].mark = mark
