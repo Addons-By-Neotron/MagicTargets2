@@ -192,6 +192,14 @@ do
       if unitTanks[name] ~= nil then
 	 return unitTanks[name]
       end
+      if oRA and oRA.maintanktable then
+	 for _,tname in pairs(oRA.maintanktable) do
+	    if name == tname then
+	       unitTanks[name] = true
+	       return true
+	    end
+	 end
+      end
       local _,class = UnitClass(unit)
       local auras = tankAura[class]
       if not auras then
@@ -305,7 +313,7 @@ local function SetBarColor(bar,cc)
    if not bar or not cc then return end
    local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
    local color = colors[cc] or colors["CC"]
-   mod:debug("Setting bar color to %s", cc)
+--   mod:debug("Setting bar color to %s", cc)
    bar.texture:SetVertexColor(color[0]*fade, color[1]*fade, color[2]*fade,1)
 end
 
