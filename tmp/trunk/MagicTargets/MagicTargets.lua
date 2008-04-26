@@ -51,19 +51,21 @@ local db
 local ccstrings = {}
 local mobspells = {}
 local died = {}
- seen = {}
- mmtargets = {}
+local seen = {}
+local mmtargets = {}
 local raidicons = {}
 local ingroup   = {}
 local trivial   = {}
- bars  = nil
+local bars  = nil
+local focusIcon, targetIcon 
+
 
 local tableStore = {}
 local options
 
 local colors = {
-    tank = { [0] = 0, [1] = 0.8, [2] = 0.3 },
-    cc   = { [0] = 0, [1] = 0.7, [2] = 0.9 }
+   tank = { [0] = 0, [1] = 0.8, [2] = 0.3 },
+   cc   = { [0] = 0, [1] = 0.7, [2] = 0.9 }
 }
    
 
@@ -86,6 +88,8 @@ local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 
 local defaults = {
    profile = {
+      focus = true,
+      target = true,
       growup = false,
       font = "Friz Quadrata TT",
       locked = false,
@@ -135,6 +139,22 @@ function mod:OnEnable()
       bars:SetColorAt(0.00, 0.3, 0.1,0, 1)
       bars.RegisterCallback(self, "AnchorClicked")
       bars:SetSortFunction(BarSortFunc)
+
+      local ih = min(db.width, db.height)
+
+      focusIcon = bars:CreateTexture(nil, "OVERLAY")
+      focusIcon:SetTexture("Interface\\Addons\\MagicTargets\\Textures\\triangle.tga")
+      focusIcon:SetHeight(ih)
+      focusIcon:SetWidth(ih)
+      focusIcon:SetVertexColor(0, 0.84, 1 ,1)
+      focusIcon:Hide()
+      
+      targetIcon = bars:CreateTexture(nil, "OVERLAY")
+      targetIcon:SetTexture("Interface\\Addons\\MagicTargets\\Textures\\triangle.tga")
+      targetIcon:SetHeight(ih)
+      targetIcon:SetWidth(ih)
+      targetIcon:SetVertexColor(0, 1, 0.4 ,1)
+      targetIcon:Hide()
    end
 
    self:ApplyProfile()
@@ -171,7 +191,8 @@ do
 	 if not addonEnabled then
 	    addonEnabled = true
 	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateBar", "target")
+	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget", "target")
+	    self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
 	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
 	    self:RegisterEvent("PLAYER_REGEN_ENABLED")
 	    self:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -190,6 +211,7 @@ do
 	    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	    self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	    self:UnregisterEvent("PLAYER_TARGET_CHANGED")
+	    self:UnregisterEvent("PLAYER_FOCUS_CHANGED")
 	    self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
 	    comm:UnregisterListener(self, "MM")
 	    self:PLAYER_REGEN_ENABLED()
@@ -197,6 +219,17 @@ do
 	 self:ClearCombatData()
 	 self:RemoveAllBars(true)
       end
+   end
+end
+
+function mod:UpdateTarget(target)
+   local icon = target == "focus" and focusIcon or targetIcon
+   icon:Hide()
+   self:UpdateBar(target)
+
+   if UnitExists(target) then
+      local bar = bars:GetBar(UnitGUID(target))
+      if bar then self:MoveIconTo(icon, bar, target) end
    end
 end
 
@@ -297,7 +330,6 @@ function mod:UpdateBars()
 	 end
       end
    end
-   self:UpdateBar("focus")
    self:IterateRaid(self.UpdateBar, true)
 
    currentbars = bars:GetBars()
@@ -337,6 +369,29 @@ function mod:UpdateBars()
       end
    end
    bars:SortBars()
+   self:UpdateTarget("target")
+   self:UpdateTarget("focus")
+end
+
+function mod:MoveIconTo(icon, bar, target)
+   local parent = icon:GetParent()
+   local othericon = target == "focus" and targetIcon or focusIcon
+   local otherparent = db[target == "focus" and "target" or "focus"] and othericon:GetParent()
+   
+   if parent.timerLabel and parent ~= otherparent then
+      parent.timerLabel:SetPoint("RIGHT", parent, "RIGHT", -3, 0)
+   end
+   if db[target] then
+      bar.timerLabel:SetPoint("RIGHT", bar, "RIGHT", -7, 0)
+      icon:SetPoint("LEFT", bar.timerLabel, "RIGHT", 1, 0)
+      icon:SetParent(bar)
+      icon:Show() 
+   else 
+      icon:SetParent(bars)
+      if bar ~= otherparent then
+	 bar.timerLabel:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
+      end
+  end
 end
 
 do
@@ -429,13 +484,13 @@ function mod:PLAYER_REGEN_ENABLED()
    if repeatTimer then
       self:CancelTimer(repeatTimer, true)
       repeatTimer = nil
-      mod:debug("Unscheduling timer.")
+--      mod:debug("Unscheduling timer.")
    end
    mod:RemoveAllBars()
    self:ClearCombatData()
    if addonEnabled then
       repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
-      mod:debug("Scheduling 5 second repeating timer.")
+--      mod:debug("Scheduling 5 second repeating timer.")
    end
 end
 
@@ -456,11 +511,11 @@ function mod:PLAYER_REGEN_DISABLED()
    if repeatTimer then
       self:CancelTimer(repeatTimer, true)
       repeatTimer = nil
-      mod:debug("Unscheduling timer.")
+--      mod:debug("Unscheduling timer.")
    end 
    if addonEnabled then
       repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 0.5)
-      mod:debug("Scheduling 0.5 second repeating timer.")
+--      mod:debug("Scheduling 0.5 second repeating timer.")
    end
 end
 
@@ -562,6 +617,8 @@ function mod:SetSize()
    local currentBars = bars:GetBars()
    bars:SetWidth(db.width)
    bars:SetHeight(db.height)
+   bars.height = db.height
+   bars.width = db.width
    if currentBars then
       for id, bar in pairs(currentbars) do
 	 bar:SetHeight(db.height)
@@ -570,6 +627,11 @@ function mod:SetSize()
       end
       bars:SortBars()
    end
+   focusIcon:SetWidth(db.height)
+   focusIcon:SetHeight(db.height)
+
+   targetIcon:SetWidth(db.height)
+   targetIcon:SetHeight(db.height)
 end
 
 function mod:OnProfileChanged(event, newdb)
@@ -621,6 +683,22 @@ options = {
 	 name = "General",
 	 order = 1,
 	 args = {
+	    ["focus"] = {
+	       type = "toggle",
+	       name = "Show Focus Marker",
+	       desc = "Show a blue triangle indicating your current focus target.",
+	       set = function() db.focus = not db.focus mod:UpdateTarget("focus") end,
+	       get = function() return db.focus end,
+	       order = 1
+	    },
+	    ["target"] = {
+	       type = "toggle",
+	       name = "Show Target Marker",
+	       desc = "Show a green triangle indicating your current target.",
+	       set = function() db.target = not db.target mod:UpdateTarget("target") end,
+	       get = function() return db.target end,
+	       order = 2
+	    },
 	    ["lock"] = {
 	       type = "toggle",
 	       name = "Lock or unlock the MT bars.",
@@ -775,4 +853,4 @@ options = {
    }
 }
 LibStub("AceConfig-3.0"):RegisterOptionsTable("Magic Targets", options, {"magictargets", "mgt"})
-self.optFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Magic Targets", "Magic Targets")
+mod.optFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Magic Targets", "Magic Targets")
