@@ -378,7 +378,7 @@ function mod:UpdateBars()
       if not died[id] then
 	 local bar = currentbars[id]
 	 if not bar then
-	    local bar = bars:NewCounterBar(id, data.cc and fmt("%s (%s)", data.name, data.cc) or data.name, 100, 100, GetRaidIcon(data.mark))
+	    local bar = bars:NewCounterBar(id, data.cc and fmt("%s (%s)", tostring(data.name), tostring(data.cc)) or data.name, 100, 100, GetRaidIcon(data.mark))
 	    bar.mark = data.mark
 	 else	    
 	    if bar.mark ~= data.mark then
@@ -386,7 +386,7 @@ function mod:UpdateBars()
 	       bar.mark = data.mark
 	    end
 	    if data.name then
-	       bar.label:SetText(data.cc and fmt("%s (%s)", data.name, data.cc) or data.name)
+	       bar.label:SetText(data.cc and fmt("%s (%s)", tostring(data.name), tostring(data.cc)) or data.name)
 	    end
 	 end
       end
