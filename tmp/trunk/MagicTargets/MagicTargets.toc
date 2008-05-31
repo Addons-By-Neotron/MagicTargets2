@@ -14,5 +14,6 @@
 # Library files
 embeds.xml
 Locales.xml
+LibFuBarPlugin-Mod-3.0.lua
 MagicTargets.lua
 

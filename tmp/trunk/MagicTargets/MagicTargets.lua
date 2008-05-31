@@ -25,6 +25,9 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
 						"AceTimer-3.0", "LibLogger-1.0", "AceConsole-3.0")
 
+-- Silently fail embedding if it doesn't exist
+LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-Mod-3.0", true)
+
 local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
@@ -32,6 +35,8 @@ local mod = MagicTargets
 local currentbars
 local comm = LibStub("MagicComm-1.0")
 
+local UnitHealth = UnitHealth
+local UnitHealthMax = UnitHealthMax
 local UnitCreatureType = UnitCreatureType
 local UnitExists = UnitExists
 local UnitCanAttack = UnitCanAttack
@@ -39,11 +44,23 @@ local UnitIsDead = UnitIsDead
 local UnitPlayerControlled = UnitPlayerControlled
 local UnitIsPlayer = UnitIsPlayer
 local UnitGUID = UnitGUID
+local UnitClass = UnitClass
+local UnitName = UnitName
+local GetNumPartyMembers = GetNumPartyMembers
+local GetNumRaidMembers = GetNumRaidMembers
+local InCombatLockdown = InCombatLockdown
 local GetRaidTargetIndex = GetRaidTargetIndex
 local fmt = string.format
 local tinsert = table.insert
 local tremove = table.remove
 local time = time
+local type = type
+local pairs = pairs
+local min = min
+local tostring = tostring
+local next = next
+local select = select
+local unpack = unpack
 
 local addonEnabled = false
 local ccspells
@@ -63,11 +80,11 @@ local focusIcon, targetIcon
 local tableStore = {}
 local options
 
-local colors = {
-   Tank    = { [0] = 0, [1] = 0.8, [2] = 0.3 },
+colors = {
+   Tank    = { [0] = 0, [1] = 1,   [2] = 0.2 },
    CC      = { [0] = 0, [1] = 0.7, [2] = 0.9 },
    Notank  = { [0] = 1, [1] = 0,   [2] = 0   },
-   Normal  = { [0] = 1, [1] = 1,   [2] = 0   }
+   Normal  = { [0] = 1, [1] = 1,   [2] = 0.5 }
 }
    
 
@@ -102,6 +119,8 @@ local defaults = {
       fontsize = 8,
       width = 150,
       height = 12,
+      fadebars = false,
+      HideMinimapButton = false, 
    }
 }
 
@@ -114,8 +133,19 @@ function mod:OnInitialize()
    MagicTargetsDB.point = nil
    db = self.db.profile
 
-   options.args.profile = DBOpt:GetOptionsTable(self.db)
+   if LibStub:GetLibrary("LibFuBarPlugin-Mod-3.0", true) then
+      -- Create the FuBarPlugin bits.
+      self:SetFuBarOption("tooltipType", "GameTooltip")
+      self:SetFuBarOption("hasNoColor", true)
+      self:SetFuBarOption("cannotDetachTooltip", true)
+      self:SetFuBarOption("hideWithoutStandby", true)
+      self:SetFuBarOption("iconPath", [[Interface\AddOns\MagicTargets\target.tga]])	
+   end
+   
 
+   options.profile = DBOpt:GetOptionsTable(self.db)
+
+   mod:SetupOptions()
 
    for i = 1,8 do
       raidicons[i] = iconPath:format(i)
@@ -137,8 +167,8 @@ end
 function mod:OnEnable()
    if not bars then
       bars = self:NewBarGroup("Magic Targets",nil,  db.width, db.height)
-      bars:SetColorAt(1.00, 1, 1, 0, 1)
-      bars:SetColorAt(0.00, 0.5, 0.5,0, 1)
+--      bars:SetColorAt(1.00, 1, 1, 0, 1)
+--      bars:SetColorAt(0.00, 0.5, 0.5,0, 1)
       bars.RegisterCallback(self, "AnchorClicked")
       bars:SetSortFunction(BarSortFunc)
 
@@ -192,6 +222,7 @@ do
       if unitTanks[name] ~= nil then
 	 return unitTanks[name]
       end
+      local oRA = oRA
       if oRA and oRA.maintanktable then
 	 for _,tname in pairs(oRA.maintanktable) do
 	    if name == tname then
@@ -293,7 +324,7 @@ end
 
 
 function mod:RemoveAllBars(removeAll)
-   currentBars = bars:GetBars()
+   local currentBars = bars:GetBars()
    if currentBars then
       for id,bar in pairs(currentBars) do
 	 if removeAll or not mmtargets[id] then
@@ -310,11 +341,17 @@ local function GetRaidIcon(id)
 end 
 
 local function SetBarColor(bar,cc)
+   if not bar then
+      _,bar = next(bars:GetBars())
+   end
    if not bar or not cc then return end
-   local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
+   --   local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
    local color = colors[cc] or colors["CC"]
---   mod:debug("Setting bar color to %s", cc)
-   bar.texture:SetVertexColor(color[0]*fade, color[1]*fade, color[2]*fade,1)
+   bar:UnsetAllColors()
+   bar:SetColorAt(1.0, color[0], color[1], color[2], 1)
+   if db.fadebars then
+      bar:SetColorAt(0, color[0]*0.5, color[1]*0.5, color[2]*0.5, 1)
+   end
 end
 
 function mod:UpdateBar(target)
@@ -327,6 +364,7 @@ function mod:UpdateBar(target)
       return
    end
    local type = UnitCreatureType(target)
+   local unitname = UnitName(target)
    if UnitCanAttack("player", target) and not UnitIsDead(target)
       and not ingroup[unitname] and not UnitPlayerControlled(target) then
 	 -- and not UnitIsPlayer(target) then
@@ -339,8 +377,10 @@ function mod:UpdateBar(target)
       local bar = currentbars[guid]
       local mark = GetRaidTargetIndex(target)
       if not bar then
-	 bar = bars:NewCounterBar(guid, UnitName(target), UnitHealth(target), UnitHealthMax(target), GetRaidIcon(mark))
+	 bar = bars:NewCounterBar(guid, unitname, UnitHealth(target), UnitHealthMax(target), GetRaidIcon(mark))
+	 SetBarColor(bar, "Normal")
 	 bar.mark = mark
+	 bar.isTimer = false
 	 currentbars[guid] = bar
       else
 	 bar:SetValue(UnitHealth(target))
@@ -379,7 +419,9 @@ function mod:UpdateBars()
 	 local bar = currentbars[id]
 	 if not bar then
 	    local bar = bars:NewCounterBar(id, data.cc and fmt("%s (%s)", tostring(data.name), tostring(data.cc)) or data.name, 100, 100, GetRaidIcon(data.mark))
+	    SetBarColor(bar, "Normal")
 	    bar.mark = data.mark
+	    bar.isTimer = false
 	 else	    
 	    if bar.mark ~= data.mark then
 	       bar:SetIcon(GetRaidIcon(data.mark))
@@ -662,7 +704,7 @@ end
 
 -- Config option handling below
 
-function GetMediaList(type)
+local function GetMediaList(type)
    local arrlist = media:List(type)
    local keylist = {}
    for _,val in pairs(arrlist) do
@@ -718,12 +760,8 @@ function mod:OnProfileChanged(event, newdb)
 end
 
 function mod:ToggleConfigDialog()
-   if C.OpenFrames["Magic Targets"] then
-      C:Close("Magic Targets")
-   else
-      C:Open("Magic Targets")
-      self:SetStatusText(string.format("Active profile: %s", self.db:GetCurrentProfile()))
-   end
+   InterfaceOptionsFrame_OpenToFrame(mod.text)
+   InterfaceOptionsFrame_OpenToFrame(mod.main)
 end
 
 do
@@ -742,190 +780,305 @@ do
    end
 end
 
-options = { 
-   type = "group",
-   name = "Magic Targets",
-   handler = mod,
-   args = {
-      config = {
-	 type = "execute",
-	 name = "Toggle configuration dialog",
-	 func = "ToggleConfigDialog",
-	 dialogHidden = true
-      }, 
-      general = {
-	 type = "group",
-	 name = "General",
-	 order = 1,
-	 args = {
-	    ["focus"] = {
-	       type = "toggle",
-	       name = "Show Focus Marker",
-	       desc = "Show a blue triangle indicating your current focus target.",
-	       set = function() db.focus = not db.focus mod:UpdateTarget("focus") end,
-	       get = function() return db.focus end,
-	       order = 1
-	    },
-	    ["target"] = {
-	       type = "toggle",
-	       name = "Show Target Marker",
-	       desc = "Show a green triangle indicating your current target.",
-	       set = function() db.target = not db.target mod:UpdateTarget("target") end,
-	       get = function() return db.target end,
-	       order = 2
-	    },
-	    ["lock"] = {
-	       type = "toggle",
-	       name = "Lock or unlock the MT bars.",
-	       width = "full",
-	       set = function()
-			db.locked = not db.locked
-			if db.locked then
-			   bars:Lock()
-			else
-			   bars:Unlock()
-			end
-			if db.hideanchor then
-			   -- Show anchor if we're unlocked but lock it again if we're locked
-			   if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
-			end
-			mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
-		     end,
-	       get = function() return db.locked end,
-	    },
-	    ["grow"] = {
-	       type = "toggle",
-	       name = "Grow bars upwards.",
-	       width = "full",
-	       set = function()
-			db.growup = not db.growup
-			bars:ReverseGrowth(db.growup)
-			mod:info("Growing bars %s.", db.growup and "up" or "down")
-		     end,
-	       get = function() return db.growup end
-	    },
-	    ["hideanchor"] = {
-	       type = "toggle",
-	       name = "Hide anchor when bars are locked.",
-	       width = "full",	
-	       set = function()
-			db.hideanchor = not db.hideanchor
-			if db.locked and db.hideanchor then
-			   bars:HideAnchor()
-			else
-			   bars:ShowAnchor()
-			end
-			mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
-		     end,
-	       get = function() return db.hideanchor end
-	    },
-	    ["mmlisten"] = {
-	       type = "toggle",
-	       name = "Listen to Magic Marker target assignments.",
-	       width = "full",
-	       set = function()
-			db.mmlisten = not db.mmlisten
-			if db.mmlisten then
-			   comm:RegisterListener(mod, "MM", true)
-			   mod:info("Listening to Magic Marker comm events.")
-			else
-			   mod:info("Not listening to Magic Marker comm events.")
-			   comm:UnregisterListener(mod, "MM")
-			end
+local function GetFuBarMinimapAttachedStatus(info)
+   return mod:IsFuBarMinimapAttached() or db.HideMinimapButton
+end
 
-		     end,
-	       get = function() return db.mmlisten end
-	    },
-	    ["outsidegroup"] = {
-	       type = "toggle",
-	       name = "Enable Magic Targets when not in a group.",
-	       width = "full",
-	       set = function()
-			db.outsidegroup = not db.outsidegroup
-			mod:ScheduleGroupScan()
-			mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
-		     end,
-	       get = function() return db.outsidegroup end
-	    },
+function mod:ToggleLocked()
+   db.locked = not db.locked
+   if db.locked then
+      bars:Lock()
+   else
+      bars:Unlock()
+   end
+   if db.hideanchor then
+      -- Show anchor if we're unlocked but lock it again if we're locked
+      if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+   end
+   mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
+end
+
+options = { 
+   general = {
+      type = "group",
+      name = "General",
+      order = 1,
+      args = {
+	 ["focus"] = {
+	    type = "toggle",
+	    name = "Show Focus Marker",
+	    desc = "Show a blue triangle indicating your current focus target.",
+	    set = function() db.focus = not db.focus mod:UpdateTarget("focus") end,
+	    get = function() return db.focus end,
+	    order = 1
+	 },
+	 ["target"] = {
+	    type = "toggle",
+	    name = "Show Target Marker",
+	    desc = "Show a green triangle indicating your current target.",
+	    set = function() db.target = not db.target mod:UpdateTarget("target") end,
+	    get = function() return db.target end,
+	    order = 2
+	 },
+	 ["lock"] = {
+	    type = "toggle",
+	    name = "Lock Magic Targets bar positions.",
+	    width = "full",
+	    set = function() mod:ToggleLocked() end,
+	    get = function() return db.locked end,
+	 },
+	 ["grow"] = {
+	    type = "toggle",
+	    name = "Grow bars upwards.",
+	    width = "full",
+	    set = function()
+		     db.growup = not db.growup
+		     bars:ReverseGrowth(db.growup)
+		     mod:info("Growing bars %s.", db.growup and "up" or "down")
+		  end,
+	    get = function() return db.growup end
+	 },
+	 ["fadebars"] = {
+	    type = "toggle",
+	    name = "Fade bars as health decreases.",
+	    width = "full",
+	    set = function()
+		     db.fadebars = not db.fadebars
+		     mod:info("Bar fading is %s.", db.fadebars and "enabled" or "disabled")
+		  end,
+	    get = function() return db.fadebars end
+	 },
+	 ["hideanchor"] = {
+	    type = "toggle",
+	    name = "Hide anchor when bars are locked.",
+	    width = "full",	
+	    set = function()
+		     db.hideanchor = not db.hideanchor
+		     if db.locked and db.hideanchor then
+			bars:HideAnchor()
+		     else
+			bars:ShowAnchor()
+		     end
+		     mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
+		  end,
+	    get = function() return db.hideanchor end
+	 },
+	 ["mmlisten"] = {
+	    type = "toggle",
+	    name = "Listen to Magic Marker target assignments.",
+	    width = "full",
+	    set = function()
+		     db.mmlisten = not db.mmlisten
+		     if db.mmlisten then
+			comm:RegisterListener(mod, "MM", true)
+			mod:info("Listening to Magic Marker comm events.")
+		     else
+			mod:info("Not listening to Magic Marker comm events.")
+			comm:UnregisterListener(mod, "MM")
+		     end
+
+		  end,
+	    get = function() return db.mmlisten end
+	 },
+	 ["outsidegroup"] = {
+	    type = "toggle",
+	    name = "Enable Magic Targets when not in a group.",
+	    width = "full",
+	    set = function()
+		     db.outsidegroup = not db.outsidegroup
+		     mod:ScheduleGroupScan()
+		     mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
+		  end,
+	    get = function() return db.outsidegroup end
 	 },
       },
-      texture = {
-	 type = "group",
-	 name = "Texture",
-	 order = 2,
-	 args = {
-	    ["texture"] = {
-	       type = "multiselect",
-	       name = "Texture",
-	       values = GetMediaList("statusbar"),
-	       set = function(_,val, state)
-			if val ~= db.texture and state then
-			   db.texture = val
-			end
-			mod:SetTexture()
-		     end,
-	       get = function(_,key) return db.texture == key end
-	    },
-	 }
-      },
-      sizing = {
-	 type = "group",
-	 name = "Bar Size",
-	 order = 4,
-	 args = {
-	    height = {
-	       type = "range",
-	       name = "Height",
-	       width = "full",
-	       min = 1, max = 50, step = 1,
-	       set = function(_,val) db.height = val mod:SetSize() end,
-	       get = function() return db.height end
-	    }, 
-	    width = {
-	       type = "range",
-	       name = "Width",
-	       width = "full",
-	       min = 1, max = 300, step = 1,
-	       set = function(_,val) db.width = val mod:SetSize() end,
-	       get = function() return db.width end
-	    }, 
-	    maxbars = {
-	       type = "range",
-	       name = "Max number of bars",
-	       min = 0, max = 30, step = 1,
-	       set = function(_,val) db.maxbars = val mod:SetSize() end,
-	       get = function() return db.maxbars end,
-	       hidden = true,
-	    }, 
-	 }
-      },
-      font = {
-	 type = "group",
-	 name = "Font",
-	 order = 3,
-	 args = {
-	    ["fontname"] = {
-	       type = "multiselect",
-	       name = "Font",
-	       values = GetMediaList("font"),
-	       set = function(_,val, state)
-			if val ~= db.font and state then
-			   db.font = val
-			   mod:SetFont()
-			end
-		     end,
-	       get = function(_,key) return db.font == key end
-	    },
-	    ["fontsize"] = {
-	       type = "range",
-	       name = "Font size",
-	       min = 1, max = 30, step = 1,
-	       set = function(_,val) db.fontsize = val mod:SetFont() end,
-	       get = function() return db.fontsize end
-	    },
+   },
+   texture = {
+      type = "group",
+      name = "Texture",
+      order = 2,
+      args = {
+	 ["texture"] = {
+	    type = "multiselect",
+	    name = "Select Texture",
+	    values = GetMediaList("statusbar"),
+	    set = function(_,val, state)
+		     if val ~= db.texture and state then
+			db.texture = val
+		     end
+		     mod:SetTexture()
+		  end,
+	    get = function(_,key) return db.texture == key end
 	 },
       }
-   }
+   },
+   sizing = {
+      type = "group",
+      name = "Bar Size",
+      order = 4,
+      args = {
+	 height = {
+	    type = "range",
+	    name = "Height",
+	    width = "full",
+	    min = 1, max = 50, step = 1,
+	    set = function(_,val) db.height = val mod:SetSize() end,
+	    get = function() return db.height end
+	 }, 
+	 width = {
+	    type = "range",
+	    name = "Width",
+	    width = "full",
+	    min = 1, max = 300, step = 1,
+	    set = function(_,val) db.width = val mod:SetSize() end,
+	    get = function() return db.width end
+	 }, 
+	 maxbars = {
+	    type = "range",
+	    name = "Max number of bars",
+	    min = 0, max = 30, step = 1,
+	    set = function(_,val) db.maxbars = val mod:SetSize() end,
+	    get = function() return db.maxbars end,
+	    hidden = true,
+	 }, 
+      }
+   },
+   font = {
+      type = "group",
+      name = "Font",
+      order = 3,
+      args = {
+	 ["fontname"] = {
+	    type = "multiselect",
+	    name = "Font Name",
+	    values = GetMediaList("font"),
+	    set = function(_,val, state)
+		     if val ~= db.font and state then
+			db.font = val
+			mod:SetFont()
+		     end
+		  end,
+	    get = function(_,key) return db.font == key end,
+	    order = 2
+	 },
+	 ["fontsize"] = {
+	    order = 1, 
+	    type = "range",
+	    name = "Font size",
+	    min = 1, max = 30, step = 1,
+	    set = function(_,val) db.fontsize = val mod:SetFont() end,
+	    get = function() return db.fontsize end
+	 },
+      },
+   },
+   fubar = {
+      type = "group",
+      name = "FuBar options",
+      disabled = function() return mod.IsFuBarMinimapAttached == nil end,
+      args = {
+	 attachMinimap = {
+	    type = "toggle",
+	    name = "Attach to minimap", 
+	    get = function(info)
+		     return mod:IsFuBarMinimapAttached()
+		  end,
+	    set = function(info, v)
+		     mod:ToggleFuBarMinimapAttached()
+		     db.AttachMinimap = mod:IsFuBarMinimapAttached()
+		  end
+	 },
+	 hideIcon = {
+	    type = "toggle",
+	    name = "Hide minimap/FuBar icon",
+	    get = function(info) return db.HideMinimapButton end,
+	    set = function(info, v)
+		     db.HideMinimapButton = v
+		     if v then mod:Hide() else mod:Show() end
+		  end
+	 },
+	 showIcon = {
+	    type = "toggle",
+	    name = "Show icon", 
+	    get = function(info) return mod:IsFuBarIconShown() end,
+	    set = function(info, v) mod:ToggleFuBarIconShown() end,
+	    disabled = GetFuBarMinimapAttachedStatus
+	 },
+	 showText = {
+	    type = "toggle",
+	    name = "Show text",
+	    get = function(info) return mod:IsFuBarTextShown() end,
+	    set = function(info, v) mod:ToggleFuBarTextShown() end,
+	    disabled = GetFuBarMinimapAttachedStatus
+	 },
+	 position = {
+	    type = "select",
+	    name = "Position",
+	    values = {LEFT = "Left", CENTER = "Center", RIGHT = "Right"},
+	    get = function() return mod:GetPanel() and mod:GetPanel():GetPluginSide(mod) end,
+	    set = function(info, val)
+		     if mod:GetPanel() and mod:GetPanel().SetPluginSide then
+			mod:GetPanel():SetPluginSide(mod, val)
+		     end
+		  end,
+	    disabled = GetFuBarMinimapAttachedStatus
+	 }
+      }
+   },
+
 }
-LibStub("AceConfig-3.0"):RegisterOptionsTable("Magic Targets", options, {"magictargets", "mgt"})
-mod.optFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Magic Targets", "Magic Targets")
+
+
+function mod:OptReg(optname, tbl, dispname, cmd)
+   if dispname then
+      optname = "Magic Targets"..optname
+      LibStub("AceConfig-3.0"):RegisterOptionsTable(optname, tbl, cmd)
+      if not cmd then
+	 return LibStub("AceConfigDialog-3.0"):AddToBlizOptions(optname, dispname, "Magic Targets")
+      end
+   else
+      LibStub("AceConfig-3.0"):RegisterOptionsTable(optname, tbl, cmd)
+      if not cmd then
+	 return LibStub("AceConfigDialog-3.0"):AddToBlizOptions(optname, "Magic Targets")
+      end
+   end
+end
+
+function mod:SetupOptions()
+   mod.main = mod:OptReg("Magic Targets", options.general)
+   mod:OptReg(": Profiles", options.profile, "Profiles")
+   mod:OptReg(": FuBar", options.fubar, "FuBar Options")
+   mod:OptReg(": Font", options.font, "Font")
+   mod:OptReg(": bar sizing", options.sizing, "Bar Sizing")
+   mod.text = mod:OptReg(": Textures", options.texture, "Bar Texture")
+
+
+   mod:OptReg("Magic Targets CmdLine", {
+		 name = "Command Line",
+		 type = "group",
+		 args = {
+		    config = {
+		       type = "execute",
+		       name = "Show configuration dialog",
+		       func = function() mod:ToggleConfigDialog() end,
+		       dialogHidden = true
+		    },
+		 }
+	      }, nil,  { "magictargets", "mgt" })
+end
+
+function mod:OnUpdateFuBarTooltip()
+   GameTooltip:AddLine("|cffffff00" .. "Click|r to toggle the Magic Target window lock")
+   GameTooltip:AddLine("|cffffff00" .. "Right-click|r to open the configuration screen")
+end
+
+function mod:OnFuBarClick(button)
+   mod:ToggleLocked()
+end
+
+function mod:OnFuBarMouseUp(button)
+   if button == "RightButton" then
+      mod:ToggleConfigDialog()
+   end
+end
+
+
