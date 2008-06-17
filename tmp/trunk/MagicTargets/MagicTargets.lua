@@ -26,8 +26,9 @@ MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", 
 						"AceTimer-3.0", "LibLogger-1.0", "AceConsole-3.0")
 
 -- Silently fail embedding if it doesn't exist
-LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-Mod-3.0", true)
+local LibStub = LibStub
 
+LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-Mod-3.0", true)
 local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
@@ -35,6 +36,9 @@ local mod = MagicTargets
 local currentbars
 local comm = LibStub("MagicComm-1.0")
 
+local GetSpellInfo = GetSpellInfo
+local UnitBuff = UnitBuff
+local UnitLevel = UnitLevel
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
 local UnitCreatureType = UnitCreatureType
@@ -48,10 +52,12 @@ local UnitClass = UnitClass
 local UnitName = UnitName
 local GetNumPartyMembers = GetNumPartyMembers
 local GetNumRaidMembers = GetNumRaidMembers
+local GetRaidRosterInfo = GetRaidRosterInfo
 local InCombatLockdown = InCombatLockdown
 local GetRaidTargetIndex = GetRaidTargetIndex
 local fmt = string.format
 local tinsert = table.insert
+local tconcat = table.concat
 local tremove = table.remove
 local time = time
 local type = type
@@ -59,6 +65,7 @@ local pairs = pairs
 local min = min
 local tostring = tostring
 local next = next
+local sort = sort
 local select = select
 local unpack = unpack
 
@@ -67,6 +74,7 @@ local ccspells
 local db, isInGroup, inCombat
 local ccstrings = {}
 local mobspells = {}
+local tooltipInfo = {}
 local died = {}
 local seen = {}
 local mmtargets = {}
@@ -76,32 +84,51 @@ local trivial   = {}
 local bars  = nil
 local focusIcon, targetIcon 
 
-
 local tableStore = {}
 local options
 
-colors = {
-   Tank    = { [0] = 0, [1] = 1,   [2] = 0.2 },
-   CC      = { [0] = 0, [1] = 0.7, [2] = 0.9 },
-   Notank  = { [0] = 1, [1] = 0,   [2] = 0   },
-   Normal  = { [0] = 1, [1] = 1,   [2] = 0.5 }
+local colors = {
+   Tank    = { [1] = 0, [2] = 1,   [3] = 0.2, [4] = 1 },
+   CC      = { [1] = 0, [2] = 0.7, [3] = 0.9, [4] = 1 },
+   Notank  = { [1] = 1, [2] = 0,   [3] = 0,   [4] = 1 },
+   Normal  = { [1] = 1, [2] = 1,   [3] = 0.5, [4] = 1 }
 }
+
+function mod.clear(tbl)
+   if type(tbl) == "table" then
+      for id,data in pairs(tbl) do
+	 if type(data) == "table" then mod.del(data) end
+	 tbl[id] = nil
+      end
+   end
+end   
    
 
-local function get()
+function mod.get()
    return tremove(tableStore) or {}
 end
 
-local function del(tbl)
-   if type(tbl) ~= "table" then return end
-   for id,data in pairs(tbl) do
-      if type(data) == "table" then
-	 del(data)
-      end
-      tbl[id] = nil
-   end
-   tinsert(tableStore, tbl)
+function mod.del(tbl, index)
+   local todel = tbl
+   if index then todel = tbl[index] end
+   if type(todel) ~= "table" then return end
+   mod.clear(todel)
+   tinsert(tableStore, todel)
+   if index then tbl[index] = nil end
 end
+
+local function SetColorOpt(arg, r, g, b, a)
+   local color = arg[#arg]
+   db.colors[color][1] = r
+   db.colors[color][2] = g
+   db.colors[color][3] = b
+   db.colors[color][4] = a
+end
+
+local function GetColorOpt(arg)
+   return unpack(db.colors[arg[#arg]])
+end
+
 
 local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 
@@ -120,7 +147,8 @@ local defaults = {
       width = 150,
       height = 12,
       fadebars = false,
-      HideMinimapButton = false, 
+      HideMinimapButton = false,
+      showTooltip = true,
    }
 }
 
@@ -133,6 +161,8 @@ function mod:OnInitialize()
    MagicTargetsDB.point = nil
    db = self.db.profile
 
+   if not db.colors then  db.colors = colors end
+   
    if LibStub:GetLibrary("LibFuBarPlugin-Mod-3.0", true) then
       -- Create the FuBarPlugin bits.
       self:SetFuBarOption("tooltipType", "GameTooltip")
@@ -260,7 +290,7 @@ do
    end
 
    function mod:ScanGroupMembers()
-      for id in pairs(ingroup) do ingroup[id] = nil end
+      mod.clear(ingroup)
       if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 then
 	 isInGroup = true
       else
@@ -305,7 +335,7 @@ end
 function mod:UpdateTarget(target)
    local icon = target == "focus" and focusIcon or targetIcon
    icon:Hide()
-   self:UpdateBar(target)
+   self:UpdateBar(target, UnitName("player"))
 
    if UnitExists(target) then
       local bar = bars:GetBar(UnitGUID(target))
@@ -313,11 +343,21 @@ function mod:UpdateTarget(target)
    end
 end
 
+local function Noop() end
+
 function mod:RemoveBar(id)
    local bar = bars:GetBar(id)
    if bar then
       bar.mark = nil
       seen[id] = nil
+      mod.del(tooltipInfo, id)
+      bar:SetScript("OnEnter", Noop)
+      bar:SetScript("OnLeave", Noop)
+      bar:EnableMouse("false")
+      if bar.tooltipShowing then
+	 bar.tooltipShowing = nil
+	 GameTooltip:Hide()
+      end
       bars:RemoveBar(id)
    end
 end
@@ -346,19 +386,97 @@ local function SetBarColor(bar,cc)
    end
    if not bar or not cc then return end
    --   local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
-   local color = colors[cc] or colors["CC"]
+   local color = db.colors[cc] or db.colors["CC"]
    bar:UnsetAllColors()
-   bar:SetColorAt(1.0, color[0], color[1], color[2], 1)
+   bar:SetColorAt(1.0, color[1], color[2], color[3], color[4])
    if db.fadebars then
-      bar:SetColorAt(0, color[0]*0.5, color[1]*0.5, color[2]*0.5, 1)
+      bar:SetColorAt(0, color[1]*0.5, color[2]*0.5, color[3]*0.5, color[4])
    end
+   bar.color = cc
 end
 
-function mod:UpdateBar(target)
+local lvlFmt = "Level %d %s"
+local colorToText = {
+   CC = "Crowd Controlled",
+   Tank = "Tanked",
+   Notank = "Untanked",
+}
+
+local function Bar_UpdateTooltip(self, tooltip)
+   tooltip:ClearLines()
+   local tti = tooltipInfo[self.name]
+   if tti and tti.name then
+      tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
+      tooltip:AddLine(fmt(lvlFmt, tti.level, tti.type), 1, 1, 1)
+      tooltip:AddLine(" ")
+      tooltip:AddDoubleLine("Health:", self.value.."%", nil, nil, nil, 1, 1, 1)
+      if tti.target then
+	 tooltip:AddDoubleLine("Target:", tti.target, nil, nil, nil, 1, 1, 1)
+      end
+      if self.color and colorToText[self.color] and InCombatLockdown() then
+	 local c = db.colors[self.color]
+	 tooltip:AddDoubleLine("Status:", colorToText[self.color], nil, nil, nil, c[1], c[2], c[3])
+      else
+	 local c = db.colors.Normal
+	 tooltip:AddDoubleLine("Status:", "Idle", nil, nil, nil, c[1], c[2], c[3])
+      end
+      if mmtargets[self.name] then
+	 tooltip:AddDoubleLine("MagicMarker Assigment:", mmtargets[self.name].cc, nil, nil, nil, 1, 1, 1)
+      end
+      tooltip:AddLine(" ")
+      if next(tti.targets) then 
+	 tooltip:AddLine("Currently targeted by:", 0.85, 0.85, 0.1);
+	 local sorted = mod.get()
+	 for id in pairs(tti.targets) do
+	    sorted[#sorted+1] = id
+	 end
+	 sort(sorted)
+	 tooltip:AddLine(tconcat(sorted, ", "), 1, 1, 1, 1)
+	 mod.del(sorted)
+      else
+	 tooltip:AddLine("Not targeted by anyone.");
+      end
+   else
+      tooltip:AddLine(self.label:GetText(), 0.85, 0.85, 0.1)
+      tooltip:AddLine(" ")
+      tooltip:AddLine("Not targeted by anyone.");
+   end
+   tooltip:Show()
+end
+
+local function Bar_OnEnter()
+   if not db.showTooltip  then return end
+   local tooltip = GameTooltip
+   local self = this
+   tooltip:SetOwner(self, "ANCHOR_CURSOR")
+   Bar_UpdateTooltip(self, tooltip)
+   this.tooltipShowing = true
+end
+
+local function Bar_OnLeave()
+   if not db.showTooltip  then return end
+   GameTooltip:Hide()
+   this.tooltipShowing = nil
+end
+
+
+function mod:NewBar(guid, unitname, current, max, mark)
+   local bar = bars:NewCounterBar(guid, unitname, current, max, GetRaidIcon(mark))
+   bar.isTimer = nil
+   SetBarColor(bar, "Normal")
+   bar:SetScript("OnEnter", Bar_OnEnter);
+   bar:SetScript("OnLeave", Bar_OnLeave);
+   bar:EnableMouse(true)
+   return bar
+end
+
+function mod:UpdateBar(target, targetedBy)
    if not UnitExists(target) then return end
+   if target == "mouseover" then targetedBy = nil end
    local guid = UnitGUID(target)
    if updated[guid] then
       updated[guid] = updated[guid] + 1
+      if targetedBy then tooltipInfo[guid].targets[targetedBy] = true end
       return
    elseif trivial[guid] or died[guid] then
       return
@@ -373,11 +491,12 @@ function mod:UpdateBar(target)
 	 self:RemoveBar(guid)
 	 return
       end
-      currentbars = currentbars or get()
+      currentbars = currentbars or mod.get()
       local bar = currentbars[guid]
       local mark = GetRaidTargetIndex(target)
       if not bar then
-	 bar = bars:NewCounterBar(guid, unitname, UnitHealth(target), UnitHealthMax(target), GetRaidIcon(mark))
+	 bar = self:NewBar(guid, unitname, UnitHealth(target), UnitHealthMax(target), mark)
+	 
 	 SetBarColor(bar, "Normal")
 	 bar.mark = mark
 	 bar.isTimer = false
@@ -389,11 +508,12 @@ function mod:UpdateBar(target)
 	    bar.mark = mark
 	 end
       end
-      target = target.."target"
+
+      local targettarget = target.."target"
       
-      if UnitExists(target) and not UnitCanAttack("player", target) and
-	 not UnitIsDead(target) and UnitIsPlayer(target) then
-	 tanked[guid] = mod:IsTank(target)
+      if UnitExists(targettarget) and not UnitCanAttack("player", targettarget) and
+	 not UnitIsDead(targettarget) and UnitIsPlayer(targettarget) then
+	 tanked[guid] = mod:IsTank(targettarget)
       end
 
       if mmtargets[guid] then
@@ -403,23 +523,40 @@ function mod:UpdateBar(target)
 	 mmtargets[guid].mark = mark
       end
       updated[guid] = 1
-      seen[guid]    = time()+4
+      if not tooltipInfo[guid] then
+	 tooltipInfo[guid] = mod.get()
+	 tooltipInfo[guid].targets = mod.get()
+      else
+	 mod.clear(tooltipInfo[guid].targets)
+      end
+
+      if targetedBy then
+	 tooltipInfo[guid].targets[targetedBy] = true
+      end
+      
+      tooltipInfo[guid].name = unitname
+      tooltipInfo[guid].target = UnitName(targettarget)
+      tooltipInfo[guid].type = type
+      tooltipInfo[guid].level = UnitLevel(target)
+      
+      seen[guid] = time()+4
    end
 end
 
 function mod:UpdateBars()
    local tt = time()
    inCombat = InCombatLockdown()
-   currentbars = bars:GetBars() or get()
-   for id in pairs(updated) do updated[id] = nil end
-   for id in pairs(unitTanks) do unitTanks[id] = nil end
-   for id in pairs(tanked) do tanked[id] = nil end
+   currentbars = bars:GetBars() or mod.get()
+
+   mod.clear(updated)
+   mod.clear(unitTanks)
+   mod.clear(tanked)
+   
    for id,data in pairs(mmtargets) do
       if not died[id] then
 	 local bar = currentbars[id]
 	 if not bar then
-	    local bar = bars:NewCounterBar(id, data.cc and fmt("%s (%s)", tostring(data.name), tostring(data.cc)) or data.name, 100, 100, GetRaidIcon(data.mark))
-	    SetBarColor(bar, "Normal")
+	    local bar = self:NewBar(id, data.name, 100, 100, data.mark)
 	    bar.mark = data.mark
 	    bar.isTimer = false
 	 else	    
@@ -427,9 +564,7 @@ function mod:UpdateBars()
 	       bar:SetIcon(GetRaidIcon(data.mark))
 	       bar.mark = data.mark
 	    end
-	    if data.name then
-	       bar.label:SetText(data.cc and fmt("%s (%s)", tostring(data.name), tostring(data.cc)) or data.name)
-	    end
+	    if data.name then bar.label:SetText(data.name) end
 	 end
       end
    end
@@ -446,8 +581,8 @@ function mod:UpdateBars()
 		  SetBarColor(bar, mmtargets[id].cc)
 		  seen[id] = nil
 	       end
-	    else
-	       seen[id] = nil
+	    elseif not mobspells[id] or not inCombat then
+	       seen[id] = nil -- only remove them if not in combat or if not cc'd
 	    end
 	 end
       end
@@ -457,33 +592,37 @@ function mod:UpdateBars()
 	       if not ccstrings[id] then
 		  local str = " "
 		  for _,tex in pairs(mobspells[id]) do
-		     str = fmt("%s|T%s:0|t", str, tex)
+		     str = fmt("%s|T%s:0|t", tostring(str), tostring(tex)) 
 		  end
 		  ccstrings[id] = str
 	       end
 	       SetBarColor(bar, "CC") 
 	    elseif inCombat then
-	       if inGroup then
-		  if tanked[id] then
-		     SetBarColor(bar, "Tank")
-		  elseif tanked[id] == false then
-		     SetBarColor(bar, "Notank")
-		  else
+	       if isInGroup then
+		  if tanked[id] == nil then
 		     SetBarColor(bar, "Normal")
+		  elseif tanked[id] then
+		     SetBarColor(bar, "Tank")
+		  else 
+		     SetBarColor(bar, "Notank")
 		  end
 	       else
 		  SetBarColor(bar, "Tank")
 	       end
 	    end
+	    if not updated[id] and tooltipInfo[id] then
+	       mod.clear(tooltipInfo[id].targets)
+	    end
 	    bar.timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
+	    if bar.tooltipShowing then
+	       Bar_UpdateTooltip(bar, GameTooltip)
+	    end
 	 else
 	    self:RemoveBar(id)	
 	 end
       end
    else
-      for id in pairs(seen) do
-	 seen[id] = nil -- no bars so reset this
-      end
+      mod.clear(seen)
    end
    bars:SortBars()
    self:UpdateTarget("target")
@@ -517,35 +656,36 @@ do
       local id, name, class, map
       if GetNumRaidMembers() > 0 then
 	 if target then 
-	    if not raidtarget then raidtarget = get() end
+	    if not raidtarget then raidtarget = mod.get() end
 	    map = raidtarget
 	 end
 	 for id = 1,GetNumRaidMembers() do
-	    if target then
+	    local name = GetRaidRosterInfo(id)
+	    if target then 
 	       if not map[id] then map[id] = "raid"..id..(target and "target" or "") end
-	       callback(self, map[id], ...)
+	       callback(self, map[id], name,...)
 	    else
-	       callback(self, GetRaidRosterInfo(id), ...)
+	       callback(self, name, name, ...)
 	    end
 	 end
       else
 	 if GetNumPartyMembers() > 0 then
-	    if not partytarget then partytarget = get() end
+	    if not partytarget then partytarget = mod.get() end
 	    map = partytarget
 	    for id = 1,GetNumPartyMembers() do
 	       if not map[id] then map[id] = "party"..id end
-	       callback(self, target and (map[id].."target") or UnitName(map[id]), ...)
+	       local name = UnitName(map[id])
+	       callback(self, (target and (map[id].."target")) or name, name, ...)
 	    end
 	 end
-	 callback(self, target and "target" or UnitName("player"), ...);
+	 local name = UnitName("player")
+	 callback(self, target and "target" or name, name, ...);
       end   
    end
 end
 
 function mod:OnCommResetV2()
-   for id in pairs(mmtargets) do
-      mmtargets[id] = nil
-   end
+   mod.clear(mmtargets) 
    if not InCombatLockdown() then
       self:RemoveAllBars(true)
    end
@@ -555,16 +695,17 @@ end
 function mod:OnAssignData(data)
    mmtargets = data
    self:UpdateBars()
+   local currentBars = bars:GetBars()
    for id,data in pairs(mmtargets) do
-      local bar = bars:GetBar(id)
-      SetBarColor(bar, data.cc)
+--      self:debug("Got mark data for %s", data.name or id)
+      SetBarColor(currentBars[id], data.cc)
    end
 end
 
 function mod:OnCommMarkV2(mark, guid, _, name)
    if not name then return end
    if not mmtargets[guid] then
-      mmtargets[guid] = get()
+      mmtargets[guid] = mod.get()
    end
    currentbars = bars:GetBars()
    if currentbars then
@@ -585,8 +726,7 @@ end
 
 function mod:OnCommUnmarkV2(guid, mark)
    if mmtargets[guid] then
-      del(mmtargets[guid])
-      mmtargets[guid] = nil
+      mod.del(mmtargets, guid)
    end
    self:UpdateBars()
 end
@@ -612,16 +752,10 @@ function mod:PLAYER_REGEN_ENABLED()
 end
 
 function mod:ClearCombatData()
-   for id in pairs(died) do
-      died[id] = nil
-   end
-   for id in pairs(ccstrings) do ccstrings[id] = nil end
-   for id,data in pairs(mobspells) do
-      del(data)
-      mobspells[id] = nil
-   end
---   for id in pairs(seen) do seen[id] = nil end
-   for id in pairs(trivial) do trivial[id] = nil end
+   mod.clear(died)
+   mod.clear(ccstrings)
+   mod.clear(mobspells)
+   mod.clear(trivial)
 end
 
 function mod:PLAYER_REGEN_DISABLED()
@@ -679,7 +813,7 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
    if event == "SPELL_AURA_APPLIED" then
       -- record crowd control
       if ccspells[spellid] then
-	 local cc = mobspells[tguid] or get()
+	 local cc = mobspells[tguid] or mod.get()
 	 if not cc[spellid] then 
 	    cc[spellid] = select(3, GetSpellInfo(spellid))
 	    mobspells[tguid] = cc
@@ -693,8 +827,7 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
 	    cc[spellid] = nil
 	    ccstrings[tguid] = nil
 	    if not next(cc) then
-	       del(cc)
-	       mobspells[tguid] = nil
+	       mod.del(mobspells, tguid)
 	    end
 	 end
       end
@@ -754,30 +887,14 @@ end
 function mod:OnProfileChanged(event, newdb)
    if event ~= "OnProfileDeleted" then
       db = self.db.profile
+      if not db.colors then db.colors = colors end -- set default if needed
       self:ApplyProfile()
    end
-   self:SetStatusText(string.format("Active profile: %s", self.db:GetCurrentProfile()))
 end
 
 function mod:ToggleConfigDialog()
    InterfaceOptionsFrame_OpenToFrame(mod.text)
    InterfaceOptionsFrame_OpenToFrame(mod.main)
-end
-
-do
-   local updateStatusTimer
-   function mod:SetStatusText(text, update)
-      local frame = C.OpenFrames["Magic Targets"]
-      if frame then
-	 frame:SetStatusText(text)
-	 if updateStatusTimer then self:CancelTimer(updateStatusTimer, true) end
-	 if update then
-	    updateStatustimer = self:ScheduleTimer("SetStatusText", 10, string.format("Active profile: %s", self.db:GetCurrentProfile()))
-	 else
-	    updateStatustimer = false 
-	 end
-      end
-   end
 end
 
 local function GetFuBarMinimapAttachedStatus(info)
@@ -786,15 +903,12 @@ end
 
 function mod:ToggleLocked()
    db.locked = not db.locked
-   if db.locked then
-      bars:Lock()
-   else
-      bars:Unlock()
-   end
+   if db.locked then bars:Lock() else bars:Unlock() end
    if db.hideanchor then
       -- Show anchor if we're unlocked but lock it again if we're locked
       if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
    end
+   bars:SortBars()
    mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
 end
 
@@ -804,6 +918,13 @@ options = {
       name = "General",
       order = 1,
       args = {
+	 ["showTooltip"] = {
+	    type = "toggle",
+	    width = "full",
+	    name = "Show mouseover tooltip", 
+	    get = function() return db.showTooltip end,
+	    set = function() db.showTooltip = not db.showTooltip end,
+	 },
 	 ["focus"] = {
 	    type = "toggle",
 	    name = "Show Focus Marker",
@@ -910,6 +1031,39 @@ options = {
 		  end,
 	    get = function(_,key) return db.texture == key end
 	 },
+      }
+   },
+   colors = {
+      type = "group",
+      name = "Colors",
+      order = 9,
+      set = SetColorOpt,
+      get = GetColorOpt,
+      args = {
+	 Tank = {
+	    type = "color",
+	    name = "Tank",
+	    desc = "Color used to indicate tanked targets. This is also used while soloing.",
+	    hasAlpha = true, 
+	 },
+	 Normal = {
+	    type = "color",
+	    name = "Idle",
+	    desc = "Color used for inactove targets.",
+	    hasAlpha = true, 
+	 },
+	 CC = {
+	    type = "color",
+	    name = "Crowd Controlled",
+	    desc = "Color used for crowd controlled targets.",
+	    hasAlpha = true, 
+	 },
+	 Notank = {
+	    type = "color",
+	    name = "Untanked",
+	    desc = "Color used for targets that are currently not tanked or crowd controlled (aka the targets killing the DPS or healers).",
+	    hasAlpha = true, 
+	 }
       }
    },
    sizing = {
@@ -1049,8 +1203,9 @@ function mod:SetupOptions()
    mod:OptReg(": FuBar", options.fubar, "FuBar Options")
    mod:OptReg(": Font", options.font, "Font")
    mod:OptReg(": bar sizing", options.sizing, "Bar Sizing")
+   mod:OptReg(": bar colors", options.colors, "Bar Colors")
    mod.text = mod:OptReg(": Textures", options.texture, "Bar Texture")
-
+   
 
    mod:OptReg("Magic Targets CmdLine", {
 		 name = "Command Line",
