@@ -1133,6 +1133,7 @@ options = {
 	 attachMinimap = {
 	    type = "toggle",
 	    name = "Attach to minimap", 
+	    width = "full", 
 	    get = function(info)
 		     return mod:IsFuBarMinimapAttached()
 		  end,
@@ -1144,6 +1145,7 @@ options = {
 	 hideIcon = {
 	    type = "toggle",
 	    name = "Hide minimap/FuBar icon",
+	    width = "full", 
 	    get = function(info) return db.HideMinimapButton end,
 	    set = function(info, v)
 		     db.HideMinimapButton = v
@@ -1151,6 +1153,7 @@ options = {
 		  end
 	 },
 	 showIcon = {
+	    width = "full", 
 	    type = "toggle",
 	    name = "Show icon", 
 	    get = function(info) return mod:IsFuBarIconShown() end,
@@ -1158,6 +1161,7 @@ options = {
 	    disabled = GetFuBarMinimapAttachedStatus
 	 },
 	 showText = {
+	    width = "full", 
 	    type = "toggle",
 	    name = "Show text",
 	    get = function(info) return mod:IsFuBarTextShown() end,
@@ -1165,6 +1169,7 @@ options = {
 	    disabled = GetFuBarMinimapAttachedStatus
 	 },
 	 position = {
+	    width = "full", 
 	    type = "select",
 	    name = "Position",
 	    values = {LEFT = "Left", CENTER = "Center", RIGHT = "Right"},
