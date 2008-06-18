@@ -476,7 +476,13 @@ function mod:UpdateBar(target, targetedBy)
    local guid = UnitGUID(target)
    if updated[guid] then
       updated[guid] = updated[guid] + 1
-      if targetedBy then tooltipInfo[guid].targets[targetedBy] = true end
+      
+      if targetedBy  and tooltipInfo[guid] then
+	 if not tooltipInfo[guid].targets then
+	    tooltipInfo[guid].targets = self.get()
+	 end
+	 tooltipInfo[guid].targets[targetedBy] = true
+      end
       return
    elseif trivial[guid] or died[guid] then
       return
