@@ -136,19 +136,22 @@ local defaults = {
    profile = {
       focus = true,
       target = true,
+      eliteonly = false,
       growup = false,
       font = "Friz Quadrata TT",
       locked = false,
       mmlisten = true,
       hideanchor = true,
-      outsidegroup = true, 
+      outsidegroup = true,      
       texture =  "Minimalist",
+      maxbars = 20,
       fontsize = 8,
       width = 150,
       height = 12,
       fadebars = false,
       HideMinimapButton = false,
       showTooltip = true,
+      scale = 1.0,
    }
 }
 
@@ -492,7 +495,7 @@ function mod:UpdateBar(target, targetedBy)
    if UnitCanAttack("player", target) and not UnitIsDead(target)
       and not ingroup[unitname] and not UnitPlayerControlled(target) then
 	 -- and not UnitIsPlayer(target) then
-      if type == "Critter" or type == "Totem"  then
+      if type == "Critter" or type == "Totem"  or (db.eliteonly and UnitClassification(target) == "normal") then
 	 trivial[guid] = true
 	 self:RemoveBar(guid)
 	 return
@@ -866,6 +869,8 @@ function mod:ApplyProfile()
    self:SetTexture()
    self:SetFont()
    self:SetSize()
+   bars:SetMaxBars(db.maxbars)
+   bars:SetScale(db.scale)
    bars:SortBars()
 end
 
@@ -964,6 +969,15 @@ options = {
 		     mod:info("Growing bars %s.", db.growup and "up" or "down")
 		  end,
 	    get = function() return db.growup end
+	 },
+	 ["eliteonly"] = {
+	    type = "toggle",
+	    name = "Filter out all non-elite mobs.",
+	    width = "full",
+	    set = function()
+		     db.eliteonly = not db.eliteonly
+		  end,
+	    get = function() return db.eliteonly end
 	 },
 	 ["fadebars"] = {
 	    type = "toggle",
@@ -1077,9 +1091,22 @@ options = {
       name = "Bar Size",
       order = 4,
       args = {
+	 ["maxbars"]  = {
+	    type = "range",
+	    min = 1, max = 100, step = 1,
+	    name = "Maximum number of bars",
+	    width="full",
+	    order = 0,
+	    set = function(var, val)
+		     db.maxbars = val
+		     bars:SetMaxBars(val)
+		     bars:SortBars()
+		  end,
+	    get = function() return db.maxbars end
+	 },
 	 height = {
 	    type = "range",
-	    name = "Height",
+	    name = "Bar Height",
 	    width = "full",
 	    min = 1, max = 50, step = 1,
 	    set = function(_,val) db.height = val mod:SetSize() end,
@@ -1087,19 +1114,19 @@ options = {
 	 }, 
 	 width = {
 	    type = "range",
-	    name = "Width",
+	    name = "Bar Width",
 	    width = "full",
 	    min = 1, max = 300, step = 1,
 	    set = function(_,val) db.width = val mod:SetSize() end,
 	    get = function() return db.width end
 	 }, 
-	 maxbars = {
+	 scale = {
 	    type = "range",
-	    name = "Max number of bars",
-	    min = 0, max = 30, step = 1,
-	    set = function(_,val) db.maxbars = val mod:SetSize() end,
-	    get = function() return db.maxbars end,
-	    hidden = true,
+	    name = "Scale Factor",
+	    width = "full",
+	    min = 0.01, max = 5, step = 0.05,
+	    set = function(_,val) db.scale = val bars:SetScale(val) end,
+	    get = function() return db.scale end
 	 }, 
       }
    },
