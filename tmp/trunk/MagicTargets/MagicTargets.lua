@@ -87,6 +87,26 @@ local focusIcon, targetIcon
 local tableStore = {}
 local options
 
+
+local classColors = {}
+for k, v in pairs(RAID_CLASS_COLORS) do
+	classColors[k] = ("|cff%02x%02x%02x"):format(v.r * 255, v.g * 255, v.b * 255)
+end
+
+-- Helper table to cache colored player names.
+local coloredNames = setmetatable({}, {__index =
+	function(self, key)
+		if type(key) == "nil" then return nil end
+		local _, class = UnitClass(key)
+		if class then
+			self[key] = classColors[class] .. key .. "|r"
+			return self[key]
+		else
+			return key
+		end
+	end
+})
+
 local colors = {
    Tank    = { [1] = 0, [2] = 1,   [3] = 0.2, [4] = 1 },
    CC      = { [1] = 0, [2] = 0.7, [3] = 0.9, [4] = 1 },
@@ -135,6 +155,7 @@ local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 local defaults = {
    profile = {
       focus = true,
+      coloredNames = true,
       target = true,
       eliteonly = false,
       growup = false,
@@ -297,6 +318,7 @@ do
       if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 then
 	 isInGroup = true
       else
+	 mod.clear(coloredNames)
 	 isInGroup = false
       end
       if isInGroup or db.outsidegroup then
@@ -414,7 +436,7 @@ local function Bar_UpdateTooltip(self, tooltip)
       tooltip:AddLine(" ")
       tooltip:AddDoubleLine("Health:", self.value.."%", nil, nil, nil, 1, 1, 1)
       if tti.target then
-	 tooltip:AddDoubleLine("Target:", tti.target, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine("Target:", db.coloredNames and coloredNames[tti.target] or tti.target, nil, nil, nil, 1, 1, 1)
       end
       if self.color and colorToText[self.color] and InCombatLockdown() then
 	 local c = db.colors[self.color]
@@ -434,6 +456,11 @@ local function Bar_UpdateTooltip(self, tooltip)
 	    sorted[#sorted+1] = id
 	 end
 	 sort(sorted)
+	 if db.coloredNames then
+	    for id,name in ipairs(sorted) do
+	       sorted[id] = coloredNames[name]
+	    end
+	 end
 	 tooltip:AddLine(tconcat(sorted, ", "), 1, 1, 1, 1)
 	 mod.del(sorted)
       else
@@ -958,6 +985,14 @@ options = {
 	    width = "full",
 	    set = function() mod:ToggleLocked() end,
 	    get = function() return db.locked end,
+	 },
+	 ["coloredNames"] = {
+	    type = "toggle",
+	    name = "Use class colors in tooltip.",
+	    width = "full",
+	    set = function() db.coloredNames = not db.coloredNames end,
+	    get = function() return db.coloredNames end,
+	    hidden = function() return not db.showTooltip end
 	 },
 	 ["grow"] = {
 	    type = "toggle",
