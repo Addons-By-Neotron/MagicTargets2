@@ -322,7 +322,7 @@ do
 	 isInGroup = false
       end
       if isInGroup or db.outsidegroup then
-	 mod:IterateRaid(function(self, unitname) ingroup[unitname] = true end)
+	 mod:IterateRaid(function(self, unitname) if unitname then ingroup[unitname] = true end end)
 	 if not addonEnabled then
 	    addonEnabled = true
 	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
