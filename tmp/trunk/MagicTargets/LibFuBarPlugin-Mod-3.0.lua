@@ -8,7 +8,7 @@ Dependencies: LibStub
 License: LGPL v2.1
 ]]
 
-local MAJOR_VERSION = "LibFuBarPlugin-Mod-3.0" --[[ keeping the MAJOR different for now until this is further tested ]]
+local MAJOR_VERSION = "LibFuBarPlugin-MT-3.0" --[[ keeping the MAJOR different for now until this is further tested ]]
 local MINOR_VERSION = tonumber(("$Revision$"):match("(%d+)")) - 60000
 
 if not LibStub then error(MAJOR_VERSION .. " requires LibStub") end

@@ -28,7 +28,7 @@ MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", 
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
 
-LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-Mod-3.0", true)
+LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-MT-3.0", true)
 local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
@@ -187,7 +187,7 @@ function mod:OnInitialize()
 
    if not db.colors then  db.colors = colors end
    
-   if LibStub:GetLibrary("LibFuBarPlugin-Mod-3.0", true) then
+   if LibStub:GetLibrary("LibFuBarPlugin-MT-3.0", true) then
       -- Create the FuBarPlugin bits.
       self:SetFuBarOption("tooltipType", "GameTooltip")
       self:SetFuBarOption("hasNoColor", true)
