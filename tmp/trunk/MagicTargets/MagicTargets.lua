@@ -23,10 +23,15 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 -- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
 -- 
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
-						"AceTimer-3.0", "LibLogger-1.0", "AceConsole-3.0")
+						"AceTimer-3.0", "AceConsole-3.0")
 
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
+
+local Logger = LibStub("LibLogger-1.0", true)
+if Logger then
+   Logger:Embed(MagicTargets)
+end
 
 LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-MT-3.0", true)
 local C = LibStub("AceConfigDialog-3.0")
@@ -244,7 +249,9 @@ function mod:OnEnable()
    end
 
    self:ApplyProfile()
-   self:SetLogLevel(self.logLevels.TRACE)
+   if self.SetLogLevel then
+      self:SetLogLevel(self.logLevels.TRACE)
+   end
    self:RegisterEvent("RAID_ROSTER_UPDATE", "ScheduleGroupScan")
    self:RegisterEvent("PARTY_MEMBERS_CHANGED", "ScheduleGroupScan")
    self:ScheduleGroupScan()

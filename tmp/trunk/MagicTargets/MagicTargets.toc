@@ -7,8 +7,8 @@
 ## X-Category: Raid
 ## X-eMail: neotron@gmail.com
 
-## OptionalDeps: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, LibLogger-1.0
-## X-Embeds: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, LibLogger-1.0
+## OptionalDeps: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0
+## X-Embeds: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0
 ## SavedVariables: MagicTargetsDB
 
 # Library files
