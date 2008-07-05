@@ -223,7 +223,7 @@ function mod:OnEnable()
       bars = self:NewBarGroup("Magic Targets",nil,  db.width, db.height)
 --      bars:SetColorAt(1.00, 1, 1, 0, 1)
 --      bars:SetColorAt(0.00, 0.5, 0.5,0, 1)
-      bars.RegisterCallback(self, "AnchorClicked")
+      bars.RegisterCallback(self, "AnchorMoved")
       bars:SetSortFunction(BarSortFunc)
 
       local ih = min(db.width, db.height)
@@ -767,8 +767,8 @@ function mod:OnCommUnmarkV2(guid, mark)
    self:UpdateBars()
 end
 
-function mod:AnchorClicked(cbk, group, button)
-   db.point = {group:GetPoint()}
+function mod:AnchorMoved(cbk, group, button)
+   db.point = { group:GetPoint() }
 end
 
 local repeatTimer
