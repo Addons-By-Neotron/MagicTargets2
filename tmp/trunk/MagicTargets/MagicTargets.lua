@@ -271,9 +271,14 @@ function mod:OnDisable()
 end
 local unitTanks = {}
 do
+
+   local function hasShieldEquipped(unit) 
+      local shieldLink = GetInventoryItemLink("target", 17)
+      return shieldLink and select(9, GetItemInfo(shieldLink)) == 'INVTYPE_SHIELD'
+   end
    local tankAura = {
-      PALADIN = { [GetSpellInfo(25780)] = true },
-      WARRIOR = { [GetSpellInfo(71)] = true  },
+      PALADIN = { [GetSpellInfo(25780)] = true }, 
+      WARRIOR = hasShieldEquipped, 
       DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }
    }
 
@@ -299,13 +304,25 @@ do
 	 unitTanks[name] = false
 	 return false
       end
-      for i = 1,40 do
-	 local buff = UnitBuff(unit, i) 
-	 if not buff then break end
---	 mod:debug("Scanning: Found %s (%s)", buff, tostring(auras[buff]))
-	 if auras[buff] then
+      if type(auras) == "function" then
+	 if auras(unit) then
 	    unitTanks[name] = true
-	    return true
+	 end
+      else 
+	 for i = 1,40 do
+	    local buff = UnitBuff(unit, i) 
+	    if not buff then break end
+	    --	 mod:debug("Scanning: Found %s (%s)", buff, tostring(auras[buff]))
+	    if auras[buff] then
+	       if class == "PALADIN" then
+		  if hasShieldEquipped(unit) then
+		     unitTanks[name] = true -- extra precaution
+		  end
+	       else
+		  unitTanks[name] = true -- druid
+	       end
+	       return true
+	    end
 	 end
       end
       unitTanks[name] = false
