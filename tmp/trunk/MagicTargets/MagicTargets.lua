@@ -270,18 +270,22 @@ function mod:OnDisable()
    self:UnregisterEvent("PARTY_MEMBERS_CHANGED")
 end
 local unitTanks = {}
-do
-
-   local function hasShieldEquipped(unit) 
+local function hasShieldEquipped(unit) 
       local shieldLink = GetInventoryItemLink("target", 17)
-      return shieldLink and select(9, GetItemInfo(shieldLink)) == 'INVTYPE_SHIELD'
+      if shieldLink then
+	 return select(9, GetItemInfo(shieldLink)) == 'INVTYPE_SHIELD'
+      else
+	 return false
+      end
    end
+do
    local tankAura = {
       PALADIN = { [GetSpellInfo(25780)] = true }, 
       WARRIOR = hasShieldEquipped, 
       DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }
    }
-
+   
+   
    local UnitBuff = UnitBuff
    function mod:IsTank(unit)
       local name = UnitName(unit)
@@ -299,33 +303,31 @@ do
       end
       local _,class = UnitClass(unit)
       local auras = tankAura[class]
+--      if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
+--				  class, tostring(auras), type(auras))
+--      end
       if not auras then
 --	 mod:debug("Found no auras for class %s", class)
 	 unitTanks[name] = false
 	 return false
       end
+
       if type(auras) == "function" then
-	 if auras(unit) then
-	    unitTanks[name] = true
-	 end
+	 unitTanks[name] = auras(unit)
+--	 mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
+	 return unitTanks[name]
       else 
 	 for i = 1,40 do
 	    local buff = UnitBuff(unit, i) 
 	    if not buff then break end
 	    --	 mod:debug("Scanning: Found %s (%s)", buff, tostring(auras[buff]))
 	    if auras[buff] then
-	       if class == "PALADIN" then
-		  if hasShieldEquipped(unit) then
-		     unitTanks[name] = true -- extra precaution
-		  end
-	       else
-		  unitTanks[name] = true -- druid
-	       end
+	       unitTanks[name] = true 
 	       return true
 	    end
 	 end
+	 unitTanks[name] = false
       end
-      unitTanks[name] = false
       return false
    end
 end
