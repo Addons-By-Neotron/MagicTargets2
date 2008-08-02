@@ -75,7 +75,7 @@ local select = select
 local unpack = unpack
 
 local addonEnabled = false
-local ccspells
+local ccspells = {}
 local db, isInGroup, inCombat
 local ccstrings = {}
 local mobspells = {}
@@ -159,6 +159,7 @@ local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
 
 local defaults = {
    profile = {
+      showDuration = true,
       focus = true,
       coloredNames = true,
       target = true,
@@ -209,7 +210,10 @@ function mod:OnInitialize()
    for i = 1,8 do
       raidicons[i] = iconPath:format(i)
    end
-   ccspells = comm.spellIdToCCID
+   for id,duration in pairs(comm.spellIdToDuration) do
+      local icon = select(3, GetSpellInfo(id))
+      ccspells[id] = { duration, icon }
+   end
 end
 
 -- Sort first by Magic Marker priority, then by health and lastly by guid.
@@ -651,10 +655,21 @@ function mod:UpdateBars()
       for id,bar in pairs(currentbars) do
 	 if  updated[id] or mmtargets[id] or seen[id] then
 	    if mobspells[id] then
+	       if db.showDuration then
+		  ccstrings[id] = nil
+	       end
 	       if not ccstrings[id] then
 		  local str = " "
+		  local timeLeft = 0
 		  for _,tex in pairs(mobspells[id]) do
-		     str = fmt("%s|T%s:0|t", tostring(str), tostring(tex)) 
+		     local spellTimeLeft = tex.expiration-tt
+		     if spellTimeLeft > timeLeft then
+			timeLeft = spellTimeLeft
+		      end
+		     str = fmt("%s|T%s:0|t", tostring(str), tostring(tex.icon))
+		  end
+		  if timeLeft > 0 and db.showDuration then 
+		     str = fmt("%s %.0f", str, timeLeft)
 		  end
 		  ccstrings[id] = str
 	       end
@@ -844,6 +859,7 @@ end
 
 function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
 					 tguid, tname, tflags, spellid, spellname)
+   --   mod:debug("EVENT: %s\n", event)
    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
    local tinGroup, tisPlayer, tisFriend = GetFlagInfo(tflags)
 
@@ -871,26 +887,27 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
    if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
       died[tguid] = true
       self:RemoveBar(tguid)
-   end
-   if event == "SPELL_AURA_APPLIED" then
+   elseif event == "SPELL_AURA_APPLIED" or aura == "SPELL_AURA_REFRESH" then
       -- record crowd control
-      if ccspells[spellid] then
+      local spellData = ccspells[spellid]
+      if spellData then
 	 local cc = mobspells[tguid] or mod.get()
-	 if not cc[spellid] then 
-	    cc[spellid] = select(3, GetSpellInfo(spellid))
-	    mobspells[tguid] = cc
-	    ccstrings[tguid] = nil
-	 end
+	 cc[spellid] = cc[spellid] or mod.get()
+	 mobspells[tguid] = cc
+	 ccstrings[tguid] = nil
+--	 if mod.debug then mod: debug("Spell %d has duration %s and will expire at %d\n",
+--				     spellid, tostring(spellData[1]),
+--				     tonumber(spellData[1])+tonumber(tt)) end
+	 cc[spellid].expiration = tt+spellData[1]-1
+	 cc[spellid].icon = spellData[2]
       end
-   elseif event == "SPELL_AURA_REMOVED" then
+   elseif event == "SPELL_AURA_REMOVED" or event == "SPELL_AURA_BROKEN" then
       local cc = mobspells[tguid]
-      if cc then
-	 if cc[spellid] then
-	    cc[spellid] = nil
-	    ccstrings[tguid] = nil
-	    if not next(cc) then
-	       mod.del(mobspells, tguid)
-	    end
+      if cc and cc[spellid] then
+	 cc[spellid] = nil
+	 ccstrings[tguid] = nil
+	 if not next(cc) then
+	    mod.del(mobspells, tguid)
 	 end
       end
    end
@@ -988,6 +1005,14 @@ options = {
 	    name = "Show mouseover tooltip", 
 	    get = function() return db.showTooltip end,
 	    set = function() db.showTooltip = not db.showTooltip end,
+	 },
+	 ["showDuration"] = {
+	    type = "toggle",
+	    width = "full",
+	    name = "Show crowd control duration on bars",
+	    desc = "When enabled, the estimated duration of crowd control spells will be shown on the bars. Note that due to lack of REFRESH events, the addon will not notice if a crowd control spell is reapplied before the previous one expires.",
+	    get = function() return db.showDuration end,
+	    set = function() db.showDuration = not db.showDuration end,
 	 },
 	 ["focus"] = {
 	    type = "toggle",
