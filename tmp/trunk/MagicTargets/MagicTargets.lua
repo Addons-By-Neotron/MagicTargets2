@@ -27,13 +27,13 @@ MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", 
 
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
+local LDB = LibStub:GetLibrary("LibDataBroker-1.1")
 
 local Logger = LibStub("LibLogger-1.0", true)
 if Logger then
    Logger:Embed(MagicTargets)
 end
 
-LibStub("AceAddon-3.0"):EmbedLibrary(MagicTargets, "LibFuBarPlugin-MT-3.0", true)
 local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
@@ -193,16 +193,26 @@ function mod:OnInitialize()
 
    if not db.colors then  db.colors = colors end
    
-   if LibStub:GetLibrary("LibFuBarPlugin-MT-3.0", true) then
-      -- Create the FuBarPlugin bits.
-      self:SetFuBarOption("tooltipType", "GameTooltip")
-      self:SetFuBarOption("hasNoColor", true)
-      self:SetFuBarOption("cannotDetachTooltip", true)
-      self:SetFuBarOption("hideWithoutStandby", true)
-      self:SetFuBarOption("iconPath", [[Interface\AddOns\MagicTargets\target.tga]])	
-   end
    
-
+   self.ldb =
+      LDB:NewDataObject("Magic Targets",
+			{
+			   launcher = true,
+			   label = "Magic Targets",
+			   icon = "Interface\\AddOns\\MagicTargets\\target.tga",
+			   tooltiptext = ("|cffffff00Left click|r to open the configuration screen.\n"..
+					  "|cffffff00Right click|r to toggle the Magic Target window lock."), 
+			   OnClick = function(clickedframe, button)
+					if button == "LeftButton" then
+					   mod:ToggleConfigDialog()
+					elseif button == "RightButton" then
+					   mod:ToggleLocked()
+					end
+				     end,
+			})
+   
+   
+   
    options.profile = DBOpt:GetOptionsTable(self.db)
 
    mod:SetupOptions()
@@ -978,10 +988,6 @@ function mod:ToggleConfigDialog()
    InterfaceOptionsFrame_OpenToFrame(mod.main)
 end
 
-local function GetFuBarMinimapAttachedStatus(info)
-   return mod:IsFuBarMinimapAttached() or db.HideMinimapButton
-end
-
 function mod:ToggleLocked()
    db.locked = not db.locked
    if db.locked then bars:Lock() else bars:Unlock() end
@@ -1120,25 +1126,6 @@ options = {
 	 },
       },
    },
-   texture = {
-      type = "group",
-      name = "Texture",
-      order = 2,
-      args = {
-	 ["texture"] = {
-	    type = "multiselect",
-	    name = "Select Texture",
-	    values = GetMediaList("statusbar"),
-	    set = function(_,val, state)
-		     if val ~= db.texture and state then
-			db.texture = val
-		     end
-		     mod:SetTexture()
-		  end,
-	    get = function(_,key) return db.texture == key end
-	 },
-      }
-   },
    colors = {
       type = "group",
       name = "Colors",
@@ -1216,93 +1203,42 @@ options = {
 	 }, 
       }
    },
-   font = {
+   looks = {
       type = "group",
-      name = "Font",
+      name = "Font and Texture",
       order = 3,
       args = {
-	 ["fontname"] = {
-	    type = "multiselect",
-	    name = "Font Name",
-	    values = GetMediaList("font"),
-	    set = function(_,val, state)
-		     if val ~= db.font and state then
-			db.font = val
-			mod:SetFont()
-		     end
-		  end,
-	    get = function(_,key) return db.font == key end,
-	    order = 2
+	 texture = {
+	    type = 'select',
+	    dialogControl = 'LSM30_Statusbar',
+	    name = 'Texture',
+	    desc = 'The background texture used for the bars.',
+	    values = AceGUIWidgetLSMlists.statusbar, 
+	    set = function(_,val) db.texture = val mod:SetTexture() end,
+	    get = function() return db.texture end,
+	    order = 3
 	 },
-	 ["fontsize"] = {
+	 fontname = {
+	    type = 'select',
+	    dialogControl = 'LSM30_Font',
+	    name = 'Font',
+	    desc = 'Font used on the bars',
+	    values = AceGUIWidgetLSMlists.font, 
+	    get = function() return db.font  end,
+	    set = function(_,key) db.font = key  mod:SetFont() end,
+	    order = 1,
+	 },
+	 fontsize = {
 	    order = 1, 
 	    type = "range",
 	    name = "Font size",
 	    min = 1, max = 30, step = 1,
 	    set = function(_,val) db.fontsize = val mod:SetFont() end,
-	    get = function() return db.fontsize end
+	    get = function() return db.fontsize end,
+	    order = 2
 	 },
       },
    },
-   fubar = {
-      type = "group",
-      name = "FuBar options",
-      disabled = function() return mod.IsFuBarMinimapAttached == nil end,
-      args = {
-	 attachMinimap = {
-	    type = "toggle",
-	    name = "Attach to minimap", 
-	    width = "full", 
-	    get = function(info)
-		     return mod:IsFuBarMinimapAttached()
-		  end,
-	    set = function(info, v)
-		     mod:ToggleFuBarMinimapAttached()
-		     db.AttachMinimap = mod:IsFuBarMinimapAttached()
-		  end
-	 },
-	 hideIcon = {
-	    type = "toggle",
-	    name = "Hide minimap/FuBar icon",
-	    width = "full", 
-	    get = function(info) return db.HideMinimapButton end,
-	    set = function(info, v)
-		     db.HideMinimapButton = v
-		     if v then mod:Hide() else mod:Show() end
-		  end
-	 },
-	 showIcon = {
-	    width = "full", 
-	    type = "toggle",
-	    name = "Show icon", 
-	    get = function(info) return mod:IsFuBarIconShown() end,
-	    set = function(info, v) mod:ToggleFuBarIconShown() end,
-	    disabled = GetFuBarMinimapAttachedStatus
-	 },
-	 showText = {
-	    width = "full", 
-	    type = "toggle",
-	    name = "Show text",
-	    get = function(info) return mod:IsFuBarTextShown() end,
-	    set = function(info, v) mod:ToggleFuBarTextShown() end,
-	    disabled = GetFuBarMinimapAttachedStatus
-	 },
-	 position = {
-	    width = "full", 
-	    type = "select",
-	    name = "Position",
-	    values = {LEFT = "Left", CENTER = "Center", RIGHT = "Right"},
-	    get = function() return mod:GetPanel() and mod:GetPanel():GetPluginSide(mod) end,
-	    set = function(info, val)
-		     if mod:GetPanel() and mod:GetPanel().SetPluginSide then
-			mod:GetPanel():SetPluginSide(mod, val)
-		     end
-		  end,
-	    disabled = GetFuBarMinimapAttachedStatus
-	 }
-      }
-   },
-
 }
 
 
@@ -1324,11 +1260,9 @@ end
 function mod:SetupOptions()
    mod.main = mod:OptReg("Magic Targets", options.general)
    mod:OptReg(": Profiles", options.profile, "Profiles")
-   mod:OptReg(": FuBar", options.fubar, "FuBar Options")
-   mod:OptReg(": Font", options.font, "Font")
    mod:OptReg(": bar sizing", options.sizing, "Bar Sizing")
    mod:OptReg(": bar colors", options.colors, "Bar Colors")
-   mod.text = mod:OptReg(": Textures", options.texture, "Bar Texture")
+   mod.text = mod:OptReg(": Font & Texture", options.looks, "Font & Texture")
    
 
    mod:OptReg("Magic Targets CmdLine", {
@@ -1343,21 +1277,6 @@ function mod:SetupOptions()
 		    },
 		 }
 	      }, nil,  { "magictargets", "mgt" })
-end
-
-function mod:OnUpdateFuBarTooltip()
-   GameTooltip:AddLine("|cffffff00" .. "Click|r to toggle the Magic Target window lock")
-   GameTooltip:AddLine("|cffffff00" .. "Right-click|r to open the configuration screen")
-end
-
-function mod:OnFuBarClick(button)
-   mod:ToggleLocked()
-end
-
-function mod:OnFuBarMouseUp(button)
-   if button == "RightButton" then
-      mod:ToggleConfigDialog()
-   end
 end
 
 

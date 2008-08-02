@@ -7,13 +7,13 @@
 ## X-Category: Raid
 ## X-eMail: neotron@gmail.com
 
-## OptionalDeps: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0
-## X-Embeds: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0
+## OptionalDeps: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets
+## X-Embeds: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets
 ## SavedVariables: MagicTargetsDB
 
 # Library files
 embeds.xml
 Locales.xml
-LibFuBarPlugin-Mod-3.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 MagicTargets.lua
 
