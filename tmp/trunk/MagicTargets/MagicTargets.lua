@@ -197,7 +197,7 @@ function mod:OnInitialize()
    self.ldb =
       LDB:NewDataObject("Magic Targets",
 			{
-			   launcher = true,
+			   type =  "launcher", 
 			   label = "Magic Targets",
 			   icon = "Interface\\AddOns\\MagicTargets\\target.tga",
 			   tooltiptext = ("|cffffff00Left click|r to open the configuration screen.\n"..
