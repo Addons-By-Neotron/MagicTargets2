@@ -701,6 +701,7 @@ function mod:UpdateBars()
 	       mod.clear(tooltipInfo[id].targets)
 	    end
 	    bar.timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
+	    bar.timerLabel:Show()
 	    if bar.tooltipShowing then
 	       Bar_UpdateTooltip(bar, GameTooltip)
 	    end
