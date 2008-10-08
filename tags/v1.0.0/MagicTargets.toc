@@ -1,0 +1,19 @@
+## Interface: 20400
+## Title: Magic Targets
+## Notes: PvE Status Frames
+## Author: NeoTron
+## Version: 1.0
+## DefaultState: enabled
+## X-Category: Raid
+## X-eMail: neotron@gmail.com
+
+## OptionalDeps: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets
+## X-Embeds: Ace3, MagicComm, LibBars-1.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets
+## SavedVariables: MagicTargetsDB
+
+# Library files
+embeds.xml
+Locales.xml
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+MagicTargets.lua
+
