@@ -21,7 +21,12 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 ]]
 -- 10:50 <@vhaarr> local ae = {}; AceLibrary("AceEvent-2.0"):embed(ae); ae:RegisterEvent("oRA_MainTankUpdate", function() --[[ update tanks ]] end)
 -- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
--- 
+--
+
+if not LibStub:GetLibrary("LibBars-1.0", true) then
+   LoadAddOn("LibBars-1.0") -- hrm..
+end
+
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
 						"AceTimer-3.0", "AceConsole-3.0")
 
@@ -870,7 +875,7 @@ end
 
 function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
 					 tguid, tname, tflags, spellid, spellname)
-   --   mod:debug("EVENT: %s\n", event)
+--   mod:debug("EVENT: %s\n", event)
    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
    local tinGroup, tisPlayer, tisFriend = GetFlagInfo(tflags)
 
@@ -898,7 +903,7 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
    if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
       died[tguid] = true
       self:RemoveBar(tguid)
-   elseif event == "SPELL_AURA_APPLIED" or aura == "SPELL_AURA_REFRESH" then
+   elseif event == "SPELL_AURA_APPLIED" or event == "SPELL_AURA_REFRESH" then
       -- record crowd control
       local spellData = ccspells[spellid]
       if spellData then
@@ -906,9 +911,9 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
 	 cc[spellid] = cc[spellid] or mod.get()
 	 mobspells[tguid] = cc
 	 ccstrings[tguid] = nil
---	 if mod.debug then mod: debug("Spell %d has duration %s and will expire at %d\n",
---				     spellid, tostring(spellData[1]),
---				     tonumber(spellData[1])+tonumber(tt)) end
+	 --	 if mod.debug then mod: debug("Spell %d has duration %s and will expire at %d\n",
+	 --				      spellid, tostring(spellData[1]),
+	 --				      tonumber(spellData[1])+tonumber(tt)) end
 	 cc[spellid].expiration = tt+spellData[1]-1
 	 cc[spellid].icon = spellData[2]
       end
@@ -985,8 +990,8 @@ function mod:OnProfileChanged(event, newdb)
 end
 
 function mod:ToggleConfigDialog()
-   InterfaceOptionsFrame_OpenToFrame(mod.text)
-   InterfaceOptionsFrame_OpenToFrame(mod.main)
+   InterfaceOptionsFrame_OpenToCategory(mod.text)
+   InterfaceOptionsFrame_OpenToCategory(mod.main)
 end
 
 function mod:ToggleLocked()
