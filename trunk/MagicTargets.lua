@@ -658,7 +658,7 @@ function mod:UpdateBars()
 	    local bar = currentbars[id]
 	    if bar and mmtargets[id] then
 	       if not inCombat then 
-		  bar:SetValue(100)
+		  bar:SetValue(bar.maxValue or 100)
 		  SetBarColor(bar, mmtargets[id].cc)
 		  seen[id] = nil
 	       end
