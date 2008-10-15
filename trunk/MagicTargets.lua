@@ -479,7 +479,7 @@ local function Bar_UpdateTooltip(self, tooltip)
       tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
       tooltip:AddLine(fmt(lvlFmt, tti.level, tti.type), 1, 1, 1)
       tooltip:AddLine(" ")
-      tooltip:AddDoubleLine("Health:", self.value.."%", nil, nil, nil, 1, 1, 1)
+      tooltip:AddDoubleLine("Health:", fmt("%.0f%%", 100*self.value/self.maxValue), nil, nil, nil, 1, 1, 1)
       if tti.target then
 	 tooltip:AddDoubleLine("Target:", db.coloredNames and coloredNames[tti.target] or tti.target, nil, nil, nil, 1, 1, 1)
       end
