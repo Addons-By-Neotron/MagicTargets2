@@ -542,6 +542,7 @@ function mod:NewBar(guid, unitname, current, max, mark)
    bar:SetScript("OnEnter", Bar_OnEnter);
    bar:SetScript("OnLeave", Bar_OnLeave);
    bar:EnableMouse(true)
+   bar:SetValue(current) -- work around LibBars-1.0 bug
    return bar
 end
 
@@ -943,6 +944,7 @@ end
 
 function mod:ApplyProfile()
    -- configure based on saved data
+   bars:ClearAllPoints()
    if db.point then
       bars:SetPoint(unpack(db.point))
    else
