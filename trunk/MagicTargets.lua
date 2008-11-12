@@ -276,6 +276,22 @@ function mod:OnEnable()
    self:ScheduleGroupScan()
 end
 
+
+local function GetRaidIcon(id)
+   if id and id > 0 and id <= 8 then return raidicons[id] end
+end 
+
+function mod:SetIcon(bar, mark)
+   if not mark then
+      bar:HideIcon()
+   elseif bar.mark ~= mark then
+      bar:SetIcon(GetRaidIcon(mark))
+      bar:ShowIcon()
+   end
+   bar.mark = mark
+end
+	 
+	    
 function mod:SetTexture()
    bars:SetTexture(media:Fetch("statusbar", db.texture))
 end
@@ -446,10 +462,6 @@ end
 
 local updated = {}
 local tanked  = {}
-local function GetRaidIcon(id)
-   if id and id > 0 and id <= 8 then return raidicons[id] end
-end 
-
 local function SetBarColor(bar,cc)
    if not bar then
       _,bar = next(bars:GetBars())
@@ -537,6 +549,8 @@ end
 
 function mod:NewBar(guid, unitname, current, max, mark)
    local bar = bars:NewCounterBar(guid, unitname, current, max, GetRaidIcon(mark))
+   if not mark then bar:HideIcon() end
+      
    bar.isTimer = nil
    SetBarColor(bar, "Normal")
    bar:SetScript("OnEnter", Bar_OnEnter);
@@ -585,10 +599,7 @@ function mod:UpdateBar(target, targetedBy)
 	 currentbars[guid] = bar
       else
 	 bar:SetValue(UnitHealth(target))
-	 if bar.mark ~= mark then
-	    bar:SetIcon(GetRaidIcon(mark))
-	    bar.mark = mark
-	 end
+	 mod:SetIcon(bar, mark)
       end
 
       local targettarget = target.."target"
@@ -642,10 +653,7 @@ function mod:UpdateBars()
 	    bar.mark = data.mark
 	    bar.isTimer = false
 	 else	    
-	    if bar.mark ~= data.mark then
-	       bar:SetIcon(GetRaidIcon(data.mark))
-	       bar.mark = data.mark
-	    end
+	    mod:SetIcon(bar, data.mark)
 	    if data.name then bar.label:SetText(data.name) end
 	 end
       end
@@ -805,8 +813,7 @@ function mod:OnCommMarkV2(mark, guid, _, name)
    if currentbars then
       for id, bar in pairs(currentbars) do
 	 if id ~=guid and bar.mark == mark then
-	    bar:SetIcon(nil)
-	    bar.mark = nil
+	    mod:SetIcon(bar)
 	    if mmtargets[id] then
 	       mmtargets[id].mark = nil
 	    end
