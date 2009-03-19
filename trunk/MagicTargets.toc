@@ -2,7 +2,7 @@
 ## Title: Magic Targets
 ## Notes: PvE Status Frames
 ## Author: NeoTron
-## Version: 1.0
+## Version: 1.0.@project-revision@
 ## DefaultState: enabled
 ## X-Category: Raid
 ## X-eMail: neotron@gmail.com
