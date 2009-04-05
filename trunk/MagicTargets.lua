@@ -27,8 +27,8 @@ if not LibStub:GetLibrary("LibBars-1.0", true) then
    LoadAddOn("LibBars-1.0") -- hrm..
 end
 
-MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibBars-1.0", 
-						"AceTimer-3.0", "AceConsole-3.0")
+MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", --, "LibBars-1.0", 
+						"AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
 
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
@@ -43,7 +43,6 @@ local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
-local currentbars
 local comm = LibStub("MagicComm-1.0")
 
 local GetSpellInfo = GetSpellInfo
@@ -65,10 +64,14 @@ local GetNumRaidMembers = GetNumRaidMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
 local InCombatLockdown = InCombatLockdown
 local GetRaidTargetIndex = GetRaidTargetIndex
+local strlen = strlen
 local fmt = string.format
+local rnd = math.random
+local ceil = math.ceil
 local tinsert = table.insert
 local tconcat = table.concat
 local tremove = table.remove
+local tsort = table.sort
 local time = time
 local type = type
 local pairs = pairs
@@ -91,12 +94,9 @@ local mmtargets = {}
 local raidicons = {}
 local ingroup   = {}
 local trivial   = {}
-local bars  = nil
 local focusIcon, targetIcon 
 
 local tableStore = {}
-local options
-
 
 local classColors = {}
 for k, v in pairs(RAID_CLASS_COLORS) do
@@ -155,12 +155,17 @@ local function SetColorOpt(arg, r, g, b, a)
    db.colors[color][4] = a
 end
 
+function mod:SetBarColors()
+   for _, frame in pairs(mod.bars) do
+      frame:SetColor(frame.color)
+   end
+end
+
 local function GetColorOpt(arg)
    return unpack(db.colors[arg[#arg]])
 end
 
-
-local iconPath = "Interface\\AddOns\\MagicTargets\\Textures\\%d.tga"
+local iconPath = [[Interface\AddOns\MagicTargets\Textures\%d.tga]]
 
 local defaults = {
    profile = {
@@ -184,6 +189,96 @@ local defaults = {
       HideMinimapButton = false,
       showTooltip = true,
       scale = 1.0,
+      labelTheme = "default",
+
+      -- frame background
+      edgeSize = 16,
+      padding = 2, 
+      backdropColors = {
+	 backgroundColor = { 0, 0, 0, 0.5},
+	 borderColor = { 0.88, 0.88, 0.88, 0.8 },
+      },
+      background = "Solid",
+      border = "None",
+      tile = false,
+      tileSize = 32,
+   },
+}
+
+local labelThemes = {
+   default = {
+      width = function(f)
+		 local l = f.labels
+		 return l[1]:GetWidth() + l[2]:GetWidth() + l[4]:GetWidth() + f.bar:GetWidth() + f.icon:GetWidth() + 20
+	      end,
+      height = function(f) return db.height end,
+      -- # Unit Name @ [======    cc] xx%.
+      icon = {
+	 visible = true,
+	 anchor = "LEFT",
+	 anchorFrame = 2,
+	 anchorTo = "RIGHT",
+	 offsetx = 3,
+      },
+      bar = {
+	 anchor = "LEFT",
+	 anchorFrame = "icon",
+	 anchorTo = "RIGHT",
+	 offsetx = 3,
+      },
+      labels = {
+	 {
+	    name = "Left Edge", 
+	    text = "[count]",
+	    anchor = "LEFT",
+	    anchorTo = "LEFT",
+	    anchorFrame = "frame",
+	    xoffset = 0,
+	    width = 20,
+	    justifyH = "RIGHT",
+	    justifyV = "CENTER", 
+	 },
+	 {
+	    name = "Left of Icon", 
+	    text = "[name]",
+	    anchor = "LEFT",
+	    anchorTo = "RIGHT", 
+	    anchorFrame = 1,
+	    xoffset = 5,
+	    width = 95, 
+	    justifyH = "LEFT",
+	    justifyV = "CENTER",
+	 },
+	 {
+	    name = "Bar Label", 
+	    text = "[cc]",
+	    anchor = "TOPRIGHT",
+	    anchorTo = "TOPRIGHT",
+	    anchorFrame = "bar",
+	    anchor2 = "BOTTOMLEFT",
+	    anchorTo2 = "BOTTOMLEFT",
+	    anchorFrame2 = "bar",
+	    xoffset = -7,
+	    xoffset2 = 3,
+	    justifyH = "RIGHT",
+	    justifyV = "CENTER", 
+	 },
+	 {
+	    name = "Right Label", 
+	    text = "[%]%",
+	    anchor = "LEFT",
+	    anchorTo = "RIGHT",
+	    anchorFrame = "bar",
+	    anchor2 = "RIGHT",
+	    anchorTo2 = "RIGHT",
+	    anchorFrame2 = "frame",	    
+	    xoffset = 3,
+	    xoffset2 = -3,
+	    width = 25,
+	    justifyH = "RIGHT",
+	    justifyV = "CENTER",
+	 }
+      }
    }
 }
 
@@ -191,20 +286,18 @@ function mod:OnInitialize()
    self.db = LibStub("AceDB-3.0"):New("MagicTargetsDB", defaults, "Default")
    self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
    self.db.RegisterCallback(self, "OnProfileCopied", "OnProfileChanged")
-   self.db.RegisterCallback(self, "OnProfileDeleted","OnProfileChanged")
    self.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
-   MagicTargetsDB.point = nil
    db = self.db.profile
-
    if not db.colors then  db.colors = colors end
-   
+
+   mod:FixLabelThemes()
    
    self.ldb =
       LDB:NewDataObject("Magic Targets",
 			{
 			   type =  "launcher", 
 			   label = "Magic Targets",
-			   icon = "Interface\\AddOns\\MagicTargets\\target.tga",
+			   icon = [[Interface\AddOns\MagicTargets\target.tga]],
 			   tooltiptext = ("|cffffff00Left click|r to open the configuration screen.\n"..
 					  "|cffffff00Right click|r to toggle the Magic Target window lock."), 
 			   OnClick = function(clickedframe, button)
@@ -218,7 +311,7 @@ function mod:OnInitialize()
    
    
    
-   options.profile = DBOpt:GetOptionsTable(self.db)
+   mod.options.profile = DBOpt:GetOptionsTable(self.db)
 
    mod:SetupOptions()
 
@@ -229,6 +322,11 @@ function mod:OnInitialize()
       local icon = select(3, GetSpellInfo(id))
       ccspells[id] = { duration, icon }
    end
+
+   mod.recycledFrames = {}
+   mod.unitbars = {}
+   mod.bars = {}
+   mod:CreateFrame()
 end
 
 -- Sort first by Magic Marker priority, then by health and lastly by guid.
@@ -237,36 +335,12 @@ local function BarSortFunc(a, b)
    local bmm = mmtargets[b.name]
    local av = 0
    local bv = 0
-   if amm then av = 1000+(amm.val or 0)+(amm.cc == 'Tank' and 100 or 0) else av = a.value end
-   if bmm then bv = 1000+(bmm.val or 0)+(bmm.cc == 'Tank' and 100 or 0) else bv = b.value end
+   if amm then av = 1000+(amm.val or 0)+(amm.cc == "Tank" and 100 or 0) else av = a.value end
+   if bmm then bv = 1000+(bmm.val or 0)+(bmm.cc == "Tank" and 100 or 0) else bv = b.value end
    if av == bv then return a.name > b.name else return av > bv end
 end
 
 function mod:OnEnable()
-   if not bars then
-      bars = self:NewBarGroup("Magic Targets",nil,  db.width, db.height)
---      bars:SetColorAt(1.00, 1, 1, 0, 1)
---      bars:SetColorAt(0.00, 0.5, 0.5,0, 1)
-      bars.RegisterCallback(self, "AnchorMoved")
-      bars:SetSortFunction(BarSortFunc)
-
-      local ih = min(db.width, db.height)
-
-      focusIcon = bars:CreateTexture(nil, "OVERLAY")
-      focusIcon:SetTexture("Interface\\Addons\\MagicTargets\\Textures\\triangle.tga")
-      focusIcon:SetHeight(ih)
-      focusIcon:SetWidth(ih)
-      focusIcon:SetVertexColor(0, 0.84, 1 ,1)
-      focusIcon:Hide()
-      
-      targetIcon = bars:CreateTexture(nil, "OVERLAY")
-      targetIcon:SetTexture("Interface\\Addons\\MagicTargets\\Textures\\triangle.tga")
-      targetIcon:SetHeight(ih)
-      targetIcon:SetWidth(ih)
-      targetIcon:SetVertexColor(0, 1, 0.4 ,1)
-      targetIcon:Hide()
-   end
-
    self:ApplyProfile()
    if self.SetLogLevel then
       self:SetLogLevel(self.logLevels.TRACE)
@@ -283,32 +357,48 @@ end
 
 function mod:SetIcon(bar, mark)
    if not mark then
-      bar:HideIcon()
+      bar.icon:SetTexture(nil)
    elseif bar.mark ~= mark then
-      bar:SetIcon(GetRaidIcon(mark))
-      bar:ShowIcon()
+      bar.icon:SetTexture(GetRaidIcon(mark))
    end
    bar.mark = mark
 end
 	 
-	    
-function mod:SetTexture()
-   bars:SetTexture(media:Fetch("statusbar", db.texture))
+
+function mod:IterateBars(func, ...)
+   for _,frame in pairs(mod.bars) do
+      if frame.bar[func] then
+	 frame.bar[func](frame.bar, ...)
+      elseif frame[func] then
+	 frame[func](frame, ...)
+      end
+   end
+end
+
+function mod:SetTexture(frame)
+   local t = media:Fetch("statusbar", db.texture)
+   if frame then
+      frame.bar:SetTexture(t)
+   else
+      mod:IterateBars("SetTexture", t)
+   end
 end
 
 function mod:SetFont()
-   bars:SetFont(media:Fetch("font", db.font), db.fontsize)
+   mod:IterateBars("SetBarFont")
 end
 
 function mod:OnDisable()
    self:UnregisterEvent("RAID_ROSTER_UPDATE")
    self:UnregisterEvent("PARTY_MEMBERS_CHANGED")
 end
+
 local unitTanks = {}
+
 local function hasShieldEquipped(unit) 
       local shieldLink = GetInventoryItemLink("target", 17)
       if shieldLink then
-	 return select(9, GetItemInfo(shieldLink)) == 'INVTYPE_SHIELD'
+	 return select(9, GetItemInfo(shieldLink)) == "INVTYPE_SHIELD"
       else
 	 return false
       end
@@ -381,6 +471,7 @@ do
       else
 	 mod.clear(coloredNames)
 	 isInGroup = false
+	 mod:OnCommResetV2() -- make sure the magic marker bars are gone
       end
       if isInGroup or db.outsidegroup then
 	 mod:IterateRaid(function(self, unitname) if unitname then ingroup[unitname] = true end end)
@@ -413,69 +504,72 @@ do
 	    self:PLAYER_REGEN_ENABLED()
 	 end
 	 self:ClearCombatData()
-	 self:RemoveAllBars(true)
+	 self:RemoveAllBars(true) 
       end
    end
 end
 
-function mod:UpdateTarget(target)
+function mod:UpdateTarget(target, norefresh)
+   if mod.testBars then return end
    local icon = target == "focus" and focusIcon or targetIcon
-   icon:Hide()
+   if icon then icon:Hide() end
+
    self:UpdateBar(target, UnitName("player"))
 
    if UnitExists(target) then
-      local bar = bars:GetBar(UnitGUID(target))
-      if bar then self:MoveIconTo(icon, bar, target) end
+      local frame = mod.unitbars[UnitGUID(target)]
+      if frame then
+	 self:MoveIconTo(icon, frame, target)
+	 mod:SetBarStrings(frame)
+      end
+   end
+   if norefresh ~= true then
+      mod:SortBars()
    end
 end
 
 local function Noop() end
 
 function mod:RemoveBar(id)
-   local bar = bars:GetBar(id)
-   if bar then
-      bar.mark = nil
+   local frame = mod.unitbars[id] or mod.bars[id]
+   if frame then
+      mod.unitbars[frame.guid] = nil
+      frame.mark = nil
+      frame.guid = nil
       seen[id] = nil
       mod.del(tooltipInfo, id)
-      bar:SetScript("OnEnter", Noop)
-      bar:SetScript("OnLeave", Noop)
-      bar:EnableMouse("false")
-      if bar.tooltipShowing then
-	 bar.tooltipShowing = nil
+      frame:SetScript("OnEnter", nil)
+      frame:SetScript("OnLeave", nil)
+      frame:EnableMouse(false)
+      if frame.tooltipShowing then
+	 frame.tooltipShowing = nil
 	 GameTooltip:Hide()
       end
-      bars:RemoveBar(id)
-   end
-end
-
-
-function mod:RemoveAllBars(removeAll)
-   local currentBars = bars:GetBars()
-   if currentBars then
-      for id,bar in pairs(currentBars) do
-	 if removeAll or not mmtargets[id] then
-	    mod:RemoveBar(id)
+      frame:Hide()
+      mod.recycledFrames[#mod.recycledFrames+1] = frame
+      
+      for id,data in pairs(mod.bars) do
+	 if frame == data then
+	    tremove(mod.bars, id)
+	    break
 	 end
       end
    end
 end
 
+
+function mod:RemoveAllBars(removeAll)
+   if mod.testBars then return end
+   for id in pairs(mod.unitbars) do 
+      if removeAll or not mmtargets[id] then
+	 mod:RemoveBar(id)
+      end
+   end
+   mod:SortBars()
+end
+
 local updated = {}
 local tanked  = {}
-local function SetBarColor(bar,cc)
-   if not bar then
-      _,bar = next(bars:GetBars())
-   end
-   if not bar or not cc then return end
-   --   local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
-   local color = db.colors[cc] or db.colors["CC"]
-   bar:UnsetAllColors()
-   bar:SetColorAt(1.0, color[1], color[2], color[3], color[4])
-   if db.fadebars then
-      bar:SetColorAt(0, color[1]*0.5, color[2]*0.5, color[3]*0.5, color[4])
-   end
-   bar.color = cc
-end
 
 local lvlFmt = "Level %d %s"
 local colorToText = {
@@ -486,14 +580,14 @@ local colorToText = {
 
 local function Bar_UpdateTooltip(self, tooltip)
    tooltip:ClearLines()
-   local tti = tooltipInfo[self.name]
+   local tti = tooltipInfo[self.guid]
    if tti and tti.name then
       tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
       tooltip:AddLine(fmt(lvlFmt, tti.level, tti.type), 1, 1, 1)
       tooltip:AddLine(" ")
-      tooltip:AddDoubleLine("Health:", fmt("%.0f%%", 100*self.value/self.maxValue), nil, nil, nil, 1, 1, 1)
+      tooltip:AddDoubleLine("Health:", fmt("%.0f%%", 100*self.bar.value/self.bar.maxValue), nil, nil, nil, 1, 1, 1)
       if tti.target then
-	 tooltip:AddDoubleLine("Target:", db.coloredNames and coloredNames[tti.target] or tti.target, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine("Target:", tti.target, nil, nil, nil, 1, 1, 1)
       end
       if self.color and colorToText[self.color] and InCombatLockdown() then
 	 local c = db.colors[self.color]
@@ -502,8 +596,11 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 local c = db.colors.Normal
 	 tooltip:AddDoubleLine("Status:", "Idle", nil, nil, nil, c[1], c[2], c[3])
       end
-      if mmtargets[self.name] then
-	 tooltip:AddDoubleLine("MagicMarker Assigment:", mmtargets[self.name].cc, nil, nil, nil, 1, 1, 1)
+      if mmtargets[self.guid] then
+	 tooltip:AddDoubleLine("MagicMarker Assigment:", mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
+      end
+      if tti.cc then
+	 tooltip:AddDoubleLine("Crowd Control:", tti.cc, nil, nil, nil, 1, 1, 1)
       end
       tooltip:AddLine(" ")
       if next(tti.targets) then 
@@ -524,8 +621,10 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 tooltip:AddLine("Not targeted by anyone.");
       end
    else
-      tooltip:AddLine(self.label:GetText(), 0.85, 0.85, 0.1)
-      tooltip:AddLine(" ")
+      if tti.name then
+	 tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)	 
+	 tooltip:AddLine(" ")
+      end
       tooltip:AddLine("Not targeted by anyone.");
    end
    tooltip:Show()
@@ -547,36 +646,25 @@ local function Bar_OnLeave()
 end
 
 
-function mod:NewBar(guid, unitname, current, max, mark)
-   local bar = bars:NewCounterBar(guid, unitname, current, max, GetRaidIcon(mark))
-   if not mark then bar:HideIcon() end
-      
-   bar.isTimer = nil
-   SetBarColor(bar, "Normal")
-   bar:SetScript("OnEnter", Bar_OnEnter);
-   bar:SetScript("OnLeave", Bar_OnLeave);
-   bar:EnableMouse(true)
-   bar:SetValue(current) -- work around LibBars-1.0 bug
-   return bar
-end
-
 function mod:UpdateBar(target, targetedBy)
-   if not UnitExists(target) then return end
+   if not UnitExists(target) or mod.testbars then return end
    if target == "mouseover" then targetedBy = nil end
    local guid = UnitGUID(target)
+
+   -- Add to the people targeting this particular unit
    if updated[guid] then
-      updated[guid] = updated[guid] + 1
-      
-      if targetedBy  and tooltipInfo[guid] then
-	 if not tooltipInfo[guid].targets then
-	    tooltipInfo[guid].targets = self.get()
+      if targetedBy then
+	 local tti = tooltipInfo[guid]
+	 if not tti.targets[targetedBy] then
+	    tti.targets[targetedBy] = true
+	    updated[guid] = updated[guid] + 1
 	 end
-	 tooltipInfo[guid].targets[targetedBy] = true
       end
       return
    elseif trivial[guid] or died[guid] then
       return
    end
+
    local type = UnitCreatureType(target)
    local unitname = UnitName(target)
    if UnitCanAttack("player", target) and not UnitIsDead(target)
@@ -587,21 +675,16 @@ function mod:UpdateBar(target, targetedBy)
 	 self:RemoveBar(guid)
 	 return
       end
-      currentbars = currentbars or mod.get()
-      local bar = currentbars[guid]
+      local frame = mod.unitbars[guid]
       local mark = GetRaidTargetIndex(target)
-      if not bar then
-	 bar = self:NewBar(guid, unitname, UnitHealth(target), UnitHealthMax(target), mark)
-	 
-	 SetBarColor(bar, "Normal")
-	 bar.mark = mark
-	 bar.isTimer = false
-	 currentbars[guid] = bar
+      local uh, uhm = UnitHealth(target), UnitHealthMax(target)
+      if not frame then
+	 frame = self:CreateBar(guid, uh, uhm)
+	 frame:SetColor("Normal")
       else
-	 bar:SetValue(UnitHealth(target))
-	 mod:SetIcon(bar, mark)
+	 frame.bar:SetValue(uh, uhm)
       end
-
+      mod:SetIcon(frame, mark)
       local targettarget = target.."target"
       
       if UnitExists(targettarget) and not UnitCanAttack("player", targettarget) and
@@ -611,64 +694,75 @@ function mod:UpdateBar(target, targetedBy)
 
       if mmtargets[guid] then
 	 if not inCombat then
-	    SetBarColor(bar, mmtargets[guid].cc)
+	    frame:SetColor(mmtargets[guid].cc)
 	 end
 	 mmtargets[guid].mark = mark
       end
-      updated[guid] = 1
-      if not tooltipInfo[guid] then
-	 tooltipInfo[guid] = mod.get()
-	 tooltipInfo[guid].targets = mod.get()
+
+      local tti = tooltipInfo[guid] or mod.get()
+      tooltipInfo[guid] = tti
+
+      if tti.targets then
+	 mod.clear(tti.targets)
       else
-	 mod.clear(tooltipInfo[guid].targets)
+	 tti.targets = mod.get()
       end
 
       if targetedBy then
-	 tooltipInfo[guid].targets[targetedBy] = true
+	 updated[guid] = 1
+	 tti.targets[targetedBy] = true
+      else
+	 updated[guid] = 0
       end
-      
-      tooltipInfo[guid].name = unitname
-      tooltipInfo[guid].target = UnitName(targettarget)
-      tooltipInfo[guid].type = type
-      tooltipInfo[guid].level = UnitLevel(target)
+
+      local tn = UnitName(targettarget) 
+      tti.name = unitname
+      tti.target = tn and db.coloredNames and coloredNames[tn] or tn
+      tti.type = type
+      tti.level = UnitLevel(target)
+      tti.health = uh
+      tti.maxhealth = uhm
+      tti["%"] = ceil(100*uh / uhm)
       
       seen[guid] = time()+4
+      if target == "mouseover" then
+	 mod:SortBars()
+	 mod:SetBarStrings(frame)
+      end
    end
 end
 
 function mod:UpdateBars()
    local tt = time()
+   if mod.testBars then return end
    inCombat = InCombatLockdown()
-   currentbars = bars:GetBars() or mod.get()
 
    mod.clear(updated)
    mod.clear(unitTanks)
    mod.clear(tanked)
-   
+
+   -- Make bars for MagicMarker assignments
    for id,data in pairs(mmtargets) do
       if not died[id] then
-	 local bar = currentbars[id]
-	 if not bar then
-	    local bar = self:NewBar(id, data.name, 100, 100, data.mark)
-	    bar.mark = data.mark
-	    bar.isTimer = false
-	 else	    
-	    mod:SetIcon(bar, data.mark)
-	    if data.name then bar.label:SetText(data.name) end
-	 end
+	 local bar = mod.unitbars[id] or self:CreateBar(id, 100, 100)
+	 mod:SetIcon(bar, data.mark)
       end
    end
+   -- Update raid targeting information, adding bars as necessary
    self:IterateRaid(self.UpdateBar, true)
+   -- If we have a pet, let's see what he's targeting
    self:UpdateBar("pettarget")
-   currentbars = bars:GetBars()
-   if currentbars and next(currentbars) then
-      for id,seenTime in pairs(seen) do
+   
+   if next(mod.unitbars) then
+      -- This updates the list of "seen" mobs. Bars for mobs not seen for a while
+      -- are removed.
+      for id, seenTime in pairs(seen) do
 	 if seenTime < tt then
-	    local bar = currentbars[id]
-	    if bar and mmtargets[id] then
+	    local frame = mod.unitbars[id]
+	    if frame and mmtargets[id] then
 	       if not inCombat then 
-		  bar:SetValue(bar.maxValue or 100)
-		  SetBarColor(bar, mmtargets[id].cc)
+		  frame.bar:SetValue(frame.bar.maxValue or 100)
+		  frame:SetColor(mmtargets[id].cc)
 		  seen[id] = nil
 	       end
 	    elseif not mobspells[id] or not inCombat then
@@ -676,9 +770,12 @@ function mod:UpdateBars()
 	    end
 	 end
       end
-      for id,bar in pairs(currentbars) do
-	 if  updated[id] or mmtargets[id] or seen[id] then
+
+      -- Update crowd control info, recycle non-needed bars etc
+      for id,frame in pairs(mod.unitbars) do
+	 if  updated[id] or mmtargets[id] or seen[id] then -- We're keeping this one
 	    if mobspells[id] then
+	       -- Build crowd control info for this mob
 	       if db.showDuration then
 		  ccstrings[id] = nil
 	       end
@@ -697,59 +794,62 @@ function mod:UpdateBars()
 		  end
 		  ccstrings[id] = str
 	       end
-	       SetBarColor(bar, "CC") 
+	       frame:SetColor("CC") 
 	    elseif inCombat then
+	       -- Update bar colors based on mob status
 	       if isInGroup then
 		  if tanked[id] == nil then
-		     SetBarColor(bar, "Normal")
+		     frame:SetColor("Normal")
 		  elseif tanked[id] then
-		     SetBarColor(bar, "Tank")
+		     frame:SetColor("Tank")
 		  else 
-		     SetBarColor(bar, "Notank")
+		     frame:SetColor("Notank")
 		  end
 	       else
-		  SetBarColor(bar, "Tank")
+		  frame:SetColor("Tank")
 	       end
 	    end
-	    if not updated[id] and tooltipInfo[id] then
+
+	    -- This unit had no raid members targeting it
+	    if tooltipInfo[id] and not updated[id] then	       
 	       mod.clear(tooltipInfo[id].targets)
 	    end
-	    bar.timerLabel:SetText(fmt("%s%s", updated[id] and tostring(updated[id]) or "", ccstrings[id] or ""))
-	    bar.timerLabel:Show()
-	    if bar.tooltipShowing then
-	       Bar_UpdateTooltip(bar, GameTooltip)
+	    
+	    if frame.tooltipShowing then
+	       Bar_UpdateTooltip(frame, GameTooltip)
 	    end
+
+	    -- Update the text on the bar
+	    mod:SetBarStrings(frame)
 	 else
-	    self:RemoveBar(id)	
+	    self:RemoveBar(id) -- Remove it since it's not seen, updated or MagicMarker
 	 end
       end
    else
       mod.clear(seen)
    end
-   bars:SortBars()
-   self:UpdateTarget("target")
-   self:UpdateTarget("focus")
+   self:UpdateTarget("target", true)
+   self:UpdateTarget("focus", true)
+   mod:SortBars()
 end
 
-function mod:MoveIconTo(icon, bar, target)
+--------------------------------------------------
+-- Move the <| icon to the appropriate location --
+--------------------------------------------------
+function mod:MoveIconTo(icon, frame, target)
+   if not icon then return end
    local parent = icon:GetParent()
    local othericon = target == "focus" and targetIcon or focusIcon
    local otherparent = db[target == "focus" and "target" or "focus"] and othericon:GetParent()
    
-   if parent.timerLabel and parent ~= otherparent then
-      parent.timerLabel:SetPoint("RIGHT", parent, "RIGHT", -3, 0)
-   end
    if db[target] then
-      bar.timerLabel:SetPoint("RIGHT", bar, "RIGHT", -7, 0)
-      icon:SetPoint("LEFT", bar.timerLabel, "RIGHT", 1, 0)
-      icon:SetParent(bar)
+      icon:SetPoint("LEFT", frame.bar, "RIGHT", -4, 0)
+      icon:SetParent(frame.bar)
       icon:Show() 
    else 
-      icon:SetParent(bars)
-      if bar ~= otherparent then
-	 bar.timerLabel:SetPoint("RIGHT", bar, "RIGHT", -3, 0)
-      end
-  end
+      icon:SetParent(mod.frame)
+      icon:Hide() 
+   end
 end
 
 do
@@ -794,13 +894,23 @@ function mod:OnCommResetV2()
    self:UpdateBars()
 end
 
+function mod:AddTooltipData(id, name)
+   local tti = tooltipInfo[id] or mod.get()
+   tooltipInfo[id] = tti
+   tti.targets = tti.targets or mod.get()
+   tti.name = name
+   tti.level = tti.level or 0
+   tti.type = tti.type or "Unknown"
+   tti["%"] = tti["%"] or 100      
+   mod:SetBarStrings(mod.unitbars[id])
+end
+
 function mod:OnAssignData(data)
    mmtargets = data
    self:UpdateBars()
-   local currentBars = bars:GetBars()
    for id,data in pairs(mmtargets) do
---      self:debug("Got mark data for %s", data.name or id)
-      SetBarColor(currentBars[id], data.cc)
+      mod.unitbars[id]:SetColor(data.cc)
+      mod:AddTooltipData(id, data.name)
    end
 end
 
@@ -808,15 +918,13 @@ function mod:OnCommMarkV2(mark, guid, _, name)
    if not name then return end
    if not mmtargets[guid] then
       mmtargets[guid] = mod.get()
+      mod:AddTooltipData(guid, name)
    end
-   currentbars = bars:GetBars()
-   if currentbars then
-      for id, bar in pairs(currentbars) do
-	 if id ~=guid and bar.mark == mark then
-	    mod:SetIcon(bar)
-	    if mmtargets[id] then
-	       mmtargets[id].mark = nil
-	    end
+   for id, frame in pairs(mod.unitbars) do
+      if id ~= guid and bar.mark == mark then
+	 mod:SetIcon(frame.bar)
+	 if mmtargets[id] then
+	    mmtargets[id].mark = nil
 	 end
       end
    end
@@ -832,10 +940,6 @@ function mod:OnCommUnmarkV2(guid, mark)
    self:UpdateBars()
 end
 
-function mod:AnchorMoved(cbk, group, button)
-   db.point = { group:GetPoint() }
-end
-
 local repeatTimer
 
 function mod:PLAYER_REGEN_ENABLED()
@@ -844,10 +948,10 @@ function mod:PLAYER_REGEN_ENABLED()
       repeatTimer = nil
 --      mod:debug("Unscheduling timer.")
    end
-   mod:RemoveAllBars()
+   mod:RemoveAllBars() 
    self:ClearCombatData()
    if addonEnabled then
-      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5.0)
+      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5)
 --      mod:debug("Scheduling 5 second repeating timer.")
    end
 end
@@ -951,50 +1055,83 @@ end
 
 function mod:ApplyProfile()
    -- configure based on saved data
-   bars:ClearAllPoints()
+   mod.frame:ClearAllPoints()
    if db.point then
-      bars:SetPoint(unpack(db.point))
+      db.point[2] = UIParent
+      mod.frame:SetPoint(unpack(db.point))
    else
-      bars:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)
+      mod.frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)
    end
-   bars:ReverseGrowth(db.growup)
-   if db.locked then bars:Lock() else bars:Unlock() end
-   if db.hideanchor and db.locked then bars:HideAnchor() else bars:ShowAnchor() end
---      self:SetLogLevel(db.logLevel)
-   self:SetTexture()
-   self:SetFont()
-   self:SetSize()
-   bars:SetMaxBars(db.maxbars)
-   bars:SetScale(db.scale)
-   bars:SortBars()
+--   if db.locked then bars:Lock() else bars:Unlock() end
+   mod:SetTexture()
+   mod:SetFont()
+   mod:SetSize()
+   mod:SetBarColors()
+   mod:FixBackdrop()
+   mod.frame:SetScale(db.scale)
+   mod:SortBars()
 end
 
+
 function mod:SetSize()
-   local currentBars = bars:GetBars()
-   bars:SetWidth(db.width)
-   bars:SetHeight(db.height)
-   bars.height = db.height
-   bars.width = db.width
-   if currentBars then
-      for id, bar in pairs(currentbars) do
-	 bar:SetHeight(db.height)
-	 bar.icon:SetHeight(db.height)
-	 bar.icon:SetWidth(db.height)
-      end
-      bars:SortBars()
+   local lbs = mod:GetLabelData()
+   for _, frame in ipairs(mod.bars) do
+      frame:Resize(lbs)
    end
+   mod:SortBars()
    focusIcon:SetWidth(db.height)
    focusIcon:SetHeight(db.height)
-
    targetIcon:SetWidth(db.height)
    targetIcon:SetHeight(db.height)
 end
 
 function mod:OnProfileChanged(event, newdb)
-   if event ~= "OnProfileDeleted" then
-      db = self.db.profile
-      if not db.colors then db.colors = colors end -- set default if needed
-      self:ApplyProfile()
+   db = self.db.profile
+   -- set defaults if needed
+   if not db.colors then db.colors = colors end
+   mod:FixLabelThemes()
+   self:ApplyProfile()
+end
+
+do
+   local upgradeKeys = {
+      anchor = true, 
+      anchor2 = true, 
+      anchorFrame = true, 
+      anchorFrame2 = true, 
+      anchorTo = true, 
+      anchorTo2 = true, 
+      name = true, 
+      xoffset = true, 
+      xoffset2 = true,
+   }
+   -- This method makes sure the label templates match the existing data.
+   function mod:FixLabelThemes()
+      local l = db.labels or mod.get()
+      db.labels = l
+      for id, data in pairs(labelThemes) do
+	 if not l[id] then
+	    l[id] = data
+	 else
+	    for key, val in pairs(data) do
+	       if key == "labels" then
+		  for lk, lv in pairs(val) do
+		     if not l[id][key][lk] then
+			l[id][key][lk] = lv
+		     else
+			for labelKey, labelVal in pairs(val) do
+			   if upgradeKeys[labelKey] then
+			      l[id][key][lk][labelKey] = labelVal
+			   end
+			end
+		     end
+		  end
+	       else
+		  l[id][key] = val
+	       end
+	    end
+	 end
+      end
    end
 end
 
@@ -1005,113 +1142,114 @@ end
 
 function mod:ToggleLocked()
    db.locked = not db.locked
-   if db.locked then bars:Lock() else bars:Unlock() end
+--   if db.locked then bars:Lock() else bars:Unlock() end
    if db.hideanchor then
       -- Show anchor if we're unlocked but lock it again if we're locked
-      if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+--      if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
    end
-   bars:SortBars()
+   mod:SortBars()
    mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
 end
 
-options = { 
+
+function mod:SetBackgroundOpt(info, val)
+   mod:SetOption(info, val)
+   mod:FixBackdrop()
+   mod:SortBars()
+end
+
+function mod:SetOption(info, val)
+   db[info[#info]] = val
+end
+
+function mod:GetOption(info)
+   return db[info[#info]]
+end
+
+
+mod.options = { 
    general = {
       type = "group",
       name = "General",
       order = 1,
+      handler = mod,
+      get = "GetOption",
+      set = "SetOption", 
       args = {
-	 ["showTooltip"] = {
+	 showTooltip = {
 	    type = "toggle",
 	    width = "full",
 	    name = "Show mouseover tooltip", 
-	    get = function() return db.showTooltip end,
-	    set = function() db.showTooltip = not db.showTooltip end,
 	 },
-	 ["showDuration"] = {
+	 showDuration = {
 	    type = "toggle",
 	    width = "full",
 	    name = "Show crowd control duration on bars",
 	    desc = "When enabled, the estimated duration of crowd control spells will be shown on the bars. Note that due to lack of REFRESH events, the addon will not notice if a crowd control spell is reapplied before the previous one expires.",
-	    get = function() return db.showDuration end,
-	    set = function() db.showDuration = not db.showDuration end,
 	 },
-	 ["focus"] = {
+	 focus = {
 	    type = "toggle",
 	    name = "Show Focus Marker",
 	    desc = "Show a blue triangle indicating your current focus target.",
 	    set = function() db.focus = not db.focus mod:UpdateTarget("focus") end,
-	    get = function() return db.focus end,
 	    order = 1
 	 },
-	 ["target"] = {
+	 target = {
 	    type = "toggle",
 	    name = "Show Target Marker",
 	    desc = "Show a green triangle indicating your current target.",
 	    set = function() db.target = not db.target mod:UpdateTarget("target") end,
-	    get = function() return db.target end,
 	    order = 2
 	 },
-	 ["lock"] = {
+	 locked = {
 	    type = "toggle",
 	    name = "Lock Magic Targets bar positions.",
 	    width = "full",
-	    set = function() mod:ToggleLocked() end,
-	    get = function() return db.locked end,
+	    set = function(_, locked) db.locked = locked end,
 	 },
-	 ["coloredNames"] = {
+	 coloredNames = {
 	    type = "toggle",
 	    name = "Use class colors in tooltip.",
 	    width = "full",
-	    set = function() db.coloredNames = not db.coloredNames end,
-	    get = function() return db.coloredNames end,
 	    hidden = function() return not db.showTooltip end
 	 },
-	 ["grow"] = {
+	 growup = {
 	    type = "toggle",
 	    name = "Grow bars upwards.",
 	    width = "full",
-	    set = function()
-		     db.growup = not db.growup
-		     bars:ReverseGrowth(db.growup)
+	    set = function(_, value)
+		     db.growup = value
 		     mod:info("Growing bars %s.", db.growup and "up" or "down")
+		     mod:SortBars()
 		  end,
-	    get = function() return db.growup end
 	 },
-	 ["eliteonly"] = {
+	 eliteonly = {
 	    type = "toggle",
 	    name = "Filter out all non-elite mobs.",
 	    width = "full",
-	    set = function()
-		     db.eliteonly = not db.eliteonly
-		  end,
-	    get = function() return db.eliteonly end
 	 },
-	 ["fadebars"] = {
+	 fadebars = {
 	    type = "toggle",
 	    name = "Fade bars as health decreases.",
 	    width = "full",
-	    set = function()
-		     db.fadebars = not db.fadebars
-		     mod:info("Bar fading is %s.", db.fadebars and "enabled" or "disabled")
-		  end,
-	    get = function() return db.fadebars end
 	 },
-	 ["hideanchor"] = {
+	 hideanchor = {
 	    type = "toggle",
 	    name = "Hide anchor when bars are locked.",
-	    width = "full",	
+	    width = "full",
+	    hidden = true,
 	    set = function()
 		     db.hideanchor = not db.hideanchor
 		     if db.locked and db.hideanchor then
-			bars:HideAnchor()
+			mod:HideAnchor()
 		     else
-			bars:ShowAnchor()
+			mod:ShowAnchor()
 		     end
 		     mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
 		  end,
 	    get = function() return db.hideanchor end
 	 },
-	 ["mmlisten"] = {
+	 mmlisten = {
 	    type = "toggle",
 	    name = "Listen to Magic Marker target assignments.",
 	    width = "full",
@@ -1126,9 +1264,8 @@ options = {
 		     end
 
 		  end,
-	    get = function() return db.mmlisten end
 	 },
-	 ["outsidegroup"] = {
+	 outsidegroup = {
 	    type = "toggle",
 	    name = "Enable Magic Targets when not in a group.",
 	    width = "full",
@@ -1137,7 +1274,6 @@ options = {
 		     mod:ScheduleGroupScan()
 		     mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
 		  end,
-	    get = function() return db.outsidegroup end
 	 },
       },
    },
@@ -1177,20 +1313,17 @@ options = {
    sizing = {
       type = "group",
       name = "Bar Size",
+      handler = mod,
+      get = "GetOption",
       order = 4,
       args = {
-	 ["maxbars"]  = {
+	 maxbars  = {
 	    type = "range",
 	    min = 1, max = 100, step = 1,
 	    name = "Maximum number of bars",
 	    width="full",
 	    order = 0,
-	    set = function(var, val)
-		     db.maxbars = val
-		     bars:SetMaxBars(val)
-		     bars:SortBars()
-		  end,
-	    get = function() return db.maxbars end
+	    set = function(var, val) db.maxbars = val mod:SortBars() end,
 	 },
 	 height = {
 	    type = "range",
@@ -1198,7 +1331,6 @@ options = {
 	    width = "full",
 	    min = 1, max = 50, step = 1,
 	    set = function(_,val) db.height = val mod:SetSize() end,
-	    get = function() return db.height end
 	 }, 
 	 width = {
 	    type = "range",
@@ -1206,15 +1338,13 @@ options = {
 	    width = "full",
 	    min = 1, max = 300, step = 1,
 	    set = function(_,val) db.width = val mod:SetSize() end,
-	    get = function() return db.width end
 	 }, 
 	 scale = {
 	    type = "range",
 	    name = "Scale Factor",
 	    width = "full",
 	    min = 0.01, max = 5, step = 0.05,
-	    set = function(_,val) db.scale = val bars:SetScale(val) end,
-	    get = function() return db.scale end
+	    set = function(_,val) db.scale = val mod.frame:SetScale(val) end,
 	 }, 
       }
    },
@@ -1224,20 +1354,20 @@ options = {
       order = 3,
       args = {
 	 texture = {
-	    type = 'select',
-	    dialogControl = 'LSM30_Statusbar',
-	    name = 'Texture',
-	    desc = 'The background texture used for the bars.',
+	    type = "select",
+	    dialogControl = "LSM30_Statusbar",
+	    name = "Texture",
+	    desc = "The background texture used for the bars.",
 	    values = AceGUIWidgetLSMlists.statusbar, 
 	    set = function(_,val) db.texture = val mod:SetTexture() end,
 	    get = function() return db.texture end,
 	    order = 3
 	 },
 	 fontname = {
-	    type = 'select',
-	    dialogControl = 'LSM30_Font',
-	    name = 'Font',
-	    desc = 'Font used on the bars',
+	    type = "select",
+	    dialogControl = "LSM30_Font",
+	    name = "Font",
+	    desc = "Font used on the bars",
 	    values = AceGUIWidgetLSMlists.font, 
 	    get = function() return db.font  end,
 	    set = function(_,key) db.font = key  mod:SetFont() end,
@@ -1254,8 +1384,132 @@ options = {
 	 },
       },
    },
+   backgroundFrame = {
+      type = "group",
+      name = "Background Frame",
+      order = 30,
+      handler = mod,
+      set = "SetBackgroundOpt",
+      get = "GetOption",       
+      args = {
+	 background = {
+	    type = "select",
+	    dialogControl = "LSM30_Background",
+	    name = "Background Texture",
+	    desc = "The background texture used for the background frame.", 
+	    order = 20,
+	    values = AceGUIWidgetLSMlists.background, 
+	 },
+	 backgroundColor = {
+	    type = "color",
+	    name = "Background Color",
+	    hasAlpha = true,
+	    set = "SetBackdropColorOpt",
+	    get = "GetBackdropColorOpt",
+	    order = 30,
+	 },
+	 spacer1 = {
+	    type = "description",
+	    width = "full",
+	       name = "",
+	    order = 35,
+	 },
+	 border = {
+	    type = "select",
+	    dialogControl = "LSM30_Border",
+	    name = "Border Texture",
+	    desc = "The border texture used for the background frame.",
+	    order = 40,
+	    values = AceGUIWidgetLSMlists.border, 
+	 },
+	 borderColor = {
+	    type = "color",
+	    name = "Border color",
+	    hasAlpha = true,
+	    set = "SetBackdropColorOpt",
+	    get = "GetBackdropColorOpt",
+	    order = 50,
+	 },
+	 spacer2 = {
+	    type = "description",
+	    width = "full",
+	    name = "",
+	    order = 55,
+	 },
+	 edgeSize = {
+	    type = "range",
+	    name = "Edge size",
+	    desc = "Width of the border.",
+	    min = 1, max = 50, step = 0.1,
+	 },
+	 padding = {
+	    type = "range",
+	    name = "Padding",
+	    desc = "Number of pixels to insert between the background frame edge and the bars.",
+	    min = 0, max = 50, step = 0.1,
+	 },
+	 tile = {
+	    type = "toggle",
+	    name = "Tile Background",
+	    desc = "Whether or not to tile the background texture.",
+	    order = 100,
+	 },
+	 tileSize = {
+	    type = "range",
+	    name = "Tile Size",
+	    desc = "The size in pixels of the background tiles.",
+	    min = 1, max = 200, step = 0.1, 
+	    order = 110,
+	    disabled = function() return not db.tile end,
+	 },
+      }
+   },
+   
+   labels = {
+      type = "group",
+      name = "Labels",
+      handler = mod,
+      get = "GetLabelOption", 
+      set = "SetLabelOption", 
+      order = 4,
+      args = {
+	 help = {
+	    type = "description",
+	    order = 1, 
+	    name =
+	       "These fields are used to set the text on and next to the bars. The following tokens will be replaced with relevant data:\n\n"..
+	       "[name] - the name of the unit.\n"..
+	       "[level] - the level of the unit.\n"..
+	       "[%] - health percentage of the unit.\n"..
+	       "[health] - absolute health of the unit.\n"..
+	       "[maxhealth] - the units maximum health.\n"..
+	       "[target] - the name of the units target.\n"..
+	       "[type] - unit type (beast, elemental etc).\n"..
+	       "[cc] - information indicating type and duration of active crowd control methods on the unit.\n"..
+	       "[count] - number of players targeting the unit.\n\n", 
+	 },
+      },
+      plugins = {}
+   },
+   labelOptions = {
+      text = {
+	 type = "input",
+	 name = "Label Text",
+	 desc = "The text for this label. Tokens are replaced as per the description above.",
+	 order = 1,
+	 width = "full",
+      }, 
+      width = {
+	 type = "range",
+	 name = "Label Width",
+	 desc = "The width of the label.",
+	 min = 1, max = 500, step = 1, 
+	 order = 2, 
+	 width = "full",
+	 hidden = "NoWidthLabel", 
+      },      
+   }
 }
-
 
 function mod:OptReg(optname, tbl, dispname, cmd)
    if dispname then
@@ -1272,12 +1526,60 @@ function mod:OptReg(optname, tbl, dispname, cmd)
    end
 end
 
+function mod:NoWidthLabel(info)
+   local var, parent = info[#info], tonumber(info[#info-1])
+   return db.labels[db.labelTheme].labels[tonumber(parent)].width == nil
+end
+function mod:GetLabelOption(info)
+   local var, parent = info[#info], info[#info-1]
+   if parent == "labels" then
+      return db[var]
+   else
+      return db.labels[db.labelTheme].labels[tonumber(parent)][var]
+   end
+end
+
+function mod:SetLabelOption(info, val)
+   local var, parent = info[#info], info[#info-1]
+   if parent == "labels" then
+      db[var] = val
+   else
+      db.labels[db.labelTheme].labels[tonumber(parent)][var]  = val
+      if var == "text" then
+	 for _,frame in pairs(mod.bars) do
+	    mod:SetBarStrings(frame)
+	 end
+      else
+	 mod:SetSize()
+      end
+   end
+end
+
+
 function mod:SetupOptions()
-   mod.main = mod:OptReg("Magic Targets", options.general)
-   mod:OptReg(": Profiles", options.profile, "Profiles")
-   mod:OptReg(": bar sizing", options.sizing, "Bar Sizing")
-   mod:OptReg(": bar colors", options.colors, "Bar Colors")
-   mod.text = mod:OptReg(": Font & Texture", options.looks, "Font & Texture")
+   local testbars = {
+      type = "toggle",
+      name = "Enable Test Bars",
+      desc = "Enable display of test bars. This allows you to configure the looks without actively targeting something. Note that when test bars are enabled, normal bars are not shown.", 
+      width = "full",
+      order = 0,
+      set = function() mod:ToggleTestBars() end, 
+      get = function() return mod.testBars end,
+   }
+   mod.options.sizing.args.testbars = testbars
+   mod.options.colors.args.testbars = testbars
+   mod.options.labels.args.testbars = testbars
+   mod.options.looks.args.testbars = testbars
+
+   mod:BuildLabelOptions()
+   
+   mod.main = mod:OptReg("Magic Targets", mod.options.general)
+   mod:OptReg(": Profiles", mod.options.profile, "Profiles")
+   mod:OptReg(": bar sizing", mod.options.sizing, "Bar Sizing")
+   mod:OptReg(": bar colors", mod.options.colors, "Bar Colors")
+   mod:OptReg(": bar labels", mod.options.labels, "Bar Labels")
+   mod:OptReg(": frame backdrop", mod.options.backgroundFrame, "Background Frame")
+   mod.text = mod:OptReg(": Font & Texture", mod.options.looks, "Font & Texture")
    
 
    mod:OptReg("Magic Targets CmdLine", {
@@ -1294,5 +1596,363 @@ function mod:SetupOptions()
 	      }, nil,  { "magictargets", "mgt" })
 end
 
+function mod:BuildLabelOptions()
+   local cfg = mod.options.labels.plugins
+   mod.clear(cfg)
+   local lbl = mod:GetLabelData()
+   cfg.labels = mod.get()
+   for id, data in pairs(lbl.labels) do
+      local lc = mod.get()
+      lc.name = data.name
+      lc.type = "group"
+      lc.order = id
+      lc.args = mod.options.labelOptions
+      cfg.labels[tostring(id)] = lc
+   end
+end
 
 
+function mod:SortBars()
+   local w, h = 0,0
+   local anchor
+   local lbs = mod:GetLabelData()
+   tsort(mod.bars, function(f1, f2) local a, b = (f1.bar.value/f1.bar.maxValue),  (f2.bar.value/f2.bar.maxValue) if a == b then return f1.guid > f2.guid else return a > b end end)
+   for id, frame in pairs(mod.bars) do
+      if id > db.maxbars then
+	 frame:Hide()
+      else
+	 local fw, fh = lbs.width(frame), lbs.height(frame)
+	 frame:ClearAllPoints()
+
+	 if fw > w then w = fw end
+	 h = h + fh
+
+	 if db.growup then
+	    if anchor then
+	       frame:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT")
+	       frame:SetPoint("BOTTOMRIGHT", anchor, "TOPRIGHT")
+	    else
+	       frame:SetPoint("BOTTOMLEFT", mod.frame, "BOTTOMLEFT", db.padding, db.padding)
+	       frame:SetPoint("BOTTOMRIGHT", mod.frame, "BOTTOMRIGHT", -db.padding, db.padding)
+	    end
+	 else
+	    if anchor then
+	       frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT")
+	       frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT")
+	    else
+	       frame:SetPoint("TOPLEFT", mod.frame, "TOPLEFT", db.padding, -db.padding)
+	       frame:SetPoint("TOPRIGHT", mod.frame, "TOPRIGHT", -db.padding, -db.padding)
+	    end
+	 end
+	 anchor = frame
+	 frame:Show()
+      end
+   end
+   if h == 0 then
+      mod.frame:Hide()
+   else
+      mod.frame:Show()
+      local p2 = db.padding*2
+      mod.frame:SetWidth(w+p2)
+      mod.frame:SetHeight(h+p2)
+   end
+end
+
+function mod:CreateFrame()
+   mod.frame = CreateFrame("Frame", nil, UIParent)
+   mod.frame:SetMovable(true)
+   local ih = min(db.width, db.height)
+   
+   focusIcon = mod.frame:CreateTexture(nil, "OVERLAY")
+   focusIcon:SetTexture([[Interface\Addons\MagicTargets\Textures\triangle.tga]])
+   focusIcon:SetHeight(ih)
+   focusIcon:SetWidth(ih)
+   focusIcon:SetVertexColor(0, 0.84, 1 ,1)
+   focusIcon:Hide()
+   
+   targetIcon = mod.frame:CreateTexture(nil, "OVERLAY")
+   targetIcon:SetTexture([[Interface\Addons\MagicTargets\Textures\triangle.tga]])
+   targetIcon:SetHeight(ih)
+   targetIcon:SetWidth(ih)
+   targetIcon:SetVertexColor(0, 1, 0.4 ,1)
+   targetIcon:Hide()
+end
+
+do
+   local function ExpandArea(frame, l, r, t, b)
+      local fl = frame:GetLeft()
+      local fr = frame:GetRight()
+      local il, ir
+      if fl and fl > 0 and fl < l then l = fl il = true end
+      if fr and fr > 0 and fr > r then r = fr ir = true end
+      return l, r, il, ir
+   end
+
+   local function SetLabelFont(label, newFont, newSize, newFlags)
+      font, size, flags = label:GetFont()
+      label:SetFont(newFont or font, newSize or size, newFlags or flags)
+   end
+   
+   local function SetBarFont(frame)
+      local font = media:Fetch("font", db.font)
+      for _,label in pairs(frame.labels) do 
+	 SetLabelFont(label, font, db.fontsize)
+      end
+   end
+
+   function mod:FindAnchorFrame(frame, anchor, id)
+      if anchor == "bar" then
+	 return frame.bar
+      elseif anchor == "icon" then
+	 return frame.icon
+      elseif anchor == "frame" then
+	 return frame
+      else
+	 anchor = frame.labels[anchor]
+	 if not anchor then
+	    mod:Print("Invalid anchor frame for label", id, ". Check the settings.")
+	    anchor = frame.bar
+	 end
+	 return anchor
+      end
+   end
+
+   function mod:GetLabelData()
+      return db.labels[db.labelTheme]
+   end
+   
+   function mod:SetupBarLabels(frame)
+      frame.labels = frame.labels or {}
+      local lbs = mod:GetLabelData()
+      -- Create if needed
+      for id, data in pairs(lbs.labels) do
+	 frame.labels[id] = frame.labels[id] or frame.bar:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+      end
+
+      -- Do the anchoring
+      for id, data in pairs(lbs.labels) do
+	 local label = frame.labels[id]
+	 label:ClearAllPoints()
+	 label:SetHeight(db.height)
+	 if data.anchor ~= "NONE" then
+	    local anchor = mod:FindAnchorFrame(frame, data.anchorFrame, id)
+	    label:SetPoint(data.anchor, anchor, data.anchorTo, data.xoffset, 0)
+	 end
+	 if data.anchor2 then
+	    local anchor = mod:FindAnchorFrame(frame, data.anchorFrame2, id)
+	    label:SetPoint(data.anchor2, anchor, data.anchorTo2, data.xoffset2, 0)
+	 end
+	 if data.width then
+	    label:SetWidth(data.width)
+	 end
+	 label:SetJustifyH(data.justifyH)
+	 label:SetJustifyV(data.justifyV)
+      end
+   end
+
+   local function GetSize(frame)
+      local lbs = mod:GetLabelData()
+      return lbs.width(frame), lbs.height(frame)
+   end
+   
+   local function ResizeBar(frame, lbs)
+      frame:SetHeight(lbs.height(frame))
+      frame:SetWidth(lbs.width(frame))
+      frame.bar:SetLength(db.width)
+      frame.bar:SetThickness(db.height)
+      frame.icon:SetHeight(db.height)
+      frame.icon:SetWidth(db.height)
+      for id,label in pairs(frame.labels) do
+	 local lw = lbs.labels[id].width
+	 label:SetHeight(db.height)
+	 if lw then 
+	    label:SetWidth(lw)
+	 end
+      end
+   end
+
+
+   local function OnDragStart(self)
+      if db.locked then return end
+      mod.frame:StartMoving()
+   end
+
+   local function OnDragStop(self)
+      db.point = { mod.frame:GetPoint() }
+      mod.frame:StopMovingOrSizing()
+   end
+   
+   local function SetColor(frame,cc)
+      local bar = frame.bar
+      if not bar or not cc then return end
+      local color = db.colors[cc] or db.colors["CC"]
+      if db.fadebars then
+	 local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
+	 bar:SetColor(color[1]*fade, color[2]*fade, color[3]*fade, color[4])
+      else
+	 bar:SetColor(color[1], color[2], color[3], color[4])
+      end
+      frame.color = cc
+   end
+   
+
+   function mod:CreateBar(guid, current, maxVal)
+      local lbs = mod:GetLabelData()
+      local frame = tremove(mod.recycledFrames) or CreateFrame("Frame", nil, mod.frame)
+      if frame.bar then
+	 frame.bar:SetValue(current, maxVal)
+      else
+	 frame.bar = frame.bar or mod:NewSimpleBar(frame, current, maxVal, db.width, db.height)
+      end
+      
+      -- Set up the left/right/center labels. Yes, given sufficiently long text, they can overlap
+      frame:SetHeight(db.height)
+      frame:SetWidth(db.width*2)
+
+      frame.icon = frame.icon or frame:CreateTexture(nil, "OVERLAY")
+      frame.icon:SetWidth(db.height)
+      frame.icon:SetHeight(db.height)
+
+      mod:SetupBarLabels(frame)
+
+      frame.SetBarFont   = SetBarFont      
+      frame.GetSize = GetSize
+      frame.Resize = ResizeBar
+      frame.SetColor = SetColor 
+      frame:SetBarFont()
+      frame:SetColor("Normal")      
+
+      mod:SetTexture(frame)
+      frame:SetScript("OnEnter", Bar_OnEnter);
+      frame:SetScript("OnLeave", Bar_OnLeave);
+      frame:SetScript("OnDragStart", OnDragStart)
+      frame:SetScript("OnDragStop", OnDragStop)
+      frame:RegisterForDrag("LeftButton")
+      frame:EnableMouse(true)
+    
+      frame.guid = guid
+
+      mod.bars[#mod.bars+1] = frame
+      mod.unitbars[guid] = frame
+
+      frame.icon:SetPoint(lbs.icon.anchor,mod:FindAnchorFrame(frame, lbs.icon.anchorFrame, "[icon]"), lbs.icon.anchorTo, lbs.icon.offsetx, 0)
+      frame.bar:SetPoint(lbs.bar.anchor,mod:FindAnchorFrame(frame, lbs.bar.anchorFrame, "[bar]"), lbs.bar.anchorTo, lbs.bar.offsetx, 0)
+      frame:Resize(lbs)
+      mod:SortBars()
+      return frame
+   end
+end
+
+do
+   local tokens = {
+      "%", "health", "target", "name", "type", "maxhealth", "cc", "count", "level"
+   }
+   local function tokenize(str, values)
+      if strlen(str) > 2 then 
+	 for _, k in ipairs(tokens) do
+	    str = gsub(str, "%["..k.."%]", values[k] or "")
+	 end
+      end
+      return str
+   end
+
+   function mod:SetBarStrings(frame)
+      local tti = tooltipInfo[frame.guid]
+      if tti then 
+	 local count = updated[frame.guid]
+	 tti.count =  count and count > 0 and count or nil
+	 for id, data in ipairs(mod:GetLabelData().labels) do
+	    frame.labels[id]:SetText(tokenize(data.text, tti))
+	 end
+      end
+   end
+end
+
+do
+   local testNames = {
+      "Elder Black Bear", "Young Brown Bear", "Big Hairy Spider", "Evil Gnoll", "Round Blob of Ooze"
+   }
+
+   function mod:ToggleTestBars()
+      mod.clear(tooltipInfo)
+
+      if mod.testBars then
+	 mod.testBars = nil
+	 mod:RemoveAllBars(true)
+	 mod:ClearCombatData()
+	 return
+      end
+
+      mod.testBars = true
+      for id = 1, max(20, db.maxbars) do
+	 local tti = mod.get()
+	 tti.name = testNames[rnd(#testNames)]
+	 tti.level = 10 + rnd(80)
+	 tti.type = "Animal"
+	 if rnd(3) == 1 then
+	    tti.count = rnd(12)
+	 end
+	 tti.targets = mod.get()
+	 if rnd(3) == 1 then
+	    tti.target = UnitName("player")
+	 end	 
+	 tti.maxhealth = tti.level * 99 + rnd(500)
+	 tti.health = ceil(tti.maxhealth * (10+rnd(90))/100)
+	 tti["%"] = ceil(100*tti.health/tti.maxhealth)
+	 tooltipInfo[tostring(id)] = tti
+	 if rnd(5) == 1 then
+	    tti.cc = "<SH> 10"
+	 end
+	 local frame = mod:CreateBar(tostring(id), tti.health, tti.maxhealth)
+	 mod:SetBarStrings(frame)
+	 if rnd(5) == 1 then
+	    mod:SetIcon(frame, rnd(8))
+	 end
+      end
+      mod:SortBars()
+   end
+end
+
+function mod:SetBackdropColorOpt(arg, r, g, b, a)
+   local color = arg[#arg]
+   db.backdropColors[color][1] = r
+   db.backdropColors[color][2] = g
+   db.backdropColors[color][3] = b
+   db.backdropColors[color][4] = a
+   mod:FixBackdrop()
+end
+
+function mod:GetBackdropColorOpt(arg)
+   local color = arg[#arg]
+   return unpack(db.backdropColors[color])
+end
+
+function mod:FixBackdrop()   
+   local bgFrame = mod.frame:GetBackdrop()
+   if not bgFrame then
+      bgFrame = {
+	 insets = {left = 1, right = 1, top = 1, bottom = 1}
+      }
+   end
+
+   local edge = 0
+   local inset = 0
+   if db.border ~= "None" then
+      edge = db.edgeSize
+      inset = db.edgeSize / 4
+   end
+   bgFrame.edgeSize = edge
+   bgFrame.insets.left   = inset
+   bgFrame.insets.right  = inset
+   bgFrame.insets.top    = inset
+   bgFrame.insets.bottom = inset
+
+   bgFrame.tile = db.tile
+   bgFrame.tileSize = db.tileSize
+
+   bgFrame.edgeFile = media:Fetch("border", db.border)
+   bgFrame.bgFile = media:Fetch("background", db.background)
+   mod.frame:SetBackdrop(bgFrame)
+   mod.frame:SetBackdropColor(unpack(db.backdropColors.backgroundColor))
+   mod.frame:SetBackdropBorderColor(unpack(db.backdropColors.borderColor))
+end
