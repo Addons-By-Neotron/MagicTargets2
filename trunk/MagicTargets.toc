@@ -17,4 +17,5 @@ Locales.xml
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 LibSimpleBar-1.0.lua
 MagicTargets.lua
+LabelThemes.lua
 

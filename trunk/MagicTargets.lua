@@ -21,7 +21,7 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 ]]
 -- 10:50 <@vhaarr> local ae = {}; AceLibrary("AceEvent-2.0"):embed(ae); ae:RegisterEvent("oRA_MainTankUpdate", function() --[[ update tanks ]] end)
 -- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
---
+
 
 if not LibStub:GetLibrary("LibBars-1.0", true) then
    LoadAddOn("LibBars-1.0") -- hrm..
@@ -205,83 +205,6 @@ local defaults = {
    },
 }
 
-local labelThemes = {
-   default = {
-      width = function(f)
-		 local l = f.labels
-		 return l[1]:GetWidth() + l[2]:GetWidth() + l[4]:GetWidth() + f.bar:GetWidth() + f.icon:GetWidth() + 20
-	      end,
-      height = function(f) return db.height end,
-      -- # Unit Name @ [======    cc] xx%.
-      icon = {
-	 visible = true,
-	 anchor = "LEFT",
-	 anchorFrame = 2,
-	 anchorTo = "RIGHT",
-	 offsetx = 3,
-      },
-      bar = {
-	 anchor = "LEFT",
-	 anchorFrame = "icon",
-	 anchorTo = "RIGHT",
-	 offsetx = 3,
-      },
-      labels = {
-	 {
-	    name = "Left Edge", 
-	    text = "[count]",
-	    anchor = "LEFT",
-	    anchorTo = "LEFT",
-	    anchorFrame = "frame",
-	    xoffset = 0,
-	    width = 20,
-	    justifyH = "RIGHT",
-	    justifyV = "CENTER", 
-	 },
-	 {
-	    name = "Left of Icon", 
-	    text = "[name]",
-	    anchor = "LEFT",
-	    anchorTo = "RIGHT", 
-	    anchorFrame = 1,
-	    xoffset = 5,
-	    width = 95, 
-	    justifyH = "LEFT",
-	    justifyV = "CENTER",
-	 },
-	 {
-	    name = "Bar Label", 
-	    text = "[cc]",
-	    anchor = "TOPRIGHT",
-	    anchorTo = "TOPRIGHT",
-	    anchorFrame = "bar",
-	    anchor2 = "BOTTOMLEFT",
-	    anchorTo2 = "BOTTOMLEFT",
-	    anchorFrame2 = "bar",
-	    xoffset = -7,
-	    xoffset2 = 3,
-	    justifyH = "RIGHT",
-	    justifyV = "CENTER", 
-	 },
-	 {
-	    name = "Right Label", 
-	    text = "[%]%",
-	    anchor = "LEFT",
-	    anchorTo = "RIGHT",
-	    anchorFrame = "bar",
-	    anchor2 = "RIGHT",
-	    anchorTo2 = "RIGHT",
-	    anchorFrame2 = "frame",	    
-	    xoffset = 3,
-	    xoffset2 = -3,
-	    width = 25,
-	    justifyH = "RIGHT",
-	    justifyV = "CENTER",
-	 }
-      }
-   }
-}
-
 function mod:OnInitialize()
    self.db = LibStub("AceDB-3.0"):New("MagicTargetsDB", defaults, "Default")
    self.db.RegisterCallback(self, "OnProfileChanged", "OnProfileChanged")
@@ -289,7 +212,6 @@ function mod:OnInitialize()
    self.db.RegisterCallback(self, "OnProfileReset", "OnProfileChanged")
    db = self.db.profile
    if not db.colors then  db.colors = colors end
-
    mod:FixLabelThemes()
    
    self.ldb =
@@ -347,7 +269,7 @@ function mod:OnEnable()
    end
    self:RegisterEvent("RAID_ROSTER_UPDATE", "ScheduleGroupScan")
    self:RegisterEvent("PARTY_MEMBERS_CHANGED", "ScheduleGroupScan")
-   self:ScheduleGroupScan()
+   self:ScheduleGroupScan(true)
 end
 
 
@@ -367,10 +289,10 @@ end
 
 function mod:IterateBars(func, ...)
    for _,frame in pairs(mod.bars) do
-      if frame.bar[func] then
-	 frame.bar[func](frame.bar, ...)
-      elseif frame[func] then
+      if frame[func] then
 	 frame[func](frame, ...)
+      elseif frame.bar[func] then
+	 frame.bar[func](frame.bar, ...)
       end
    end
 end
@@ -386,6 +308,7 @@ end
 
 function mod:SetFont()
    mod:IterateBars("SetBarFont")
+   mod:SetHandleFont()
 end
 
 function mod:OnDisable()
@@ -459,9 +382,13 @@ end
 
 do
    local groupScanTimer
-   function mod:ScheduleGroupScan()
+   function mod:ScheduleGroupScan(fast)
       if groupScanTimer then self:CancelTimer(groupScanTimer, true) end
-      groupScanTimer = self:ScheduleTimer("ScanGroupMembers", 5)
+      if fast == true then
+	 groupScanTimer = self:ScheduleTimer("ScanGroupMembers", 0.1)
+      else
+	 groupScanTimer = self:ScheduleTimer("ScanGroupMembers", 5)
+      end
    end
 
    function mod:ScanGroupMembers()
@@ -655,7 +582,7 @@ function mod:UpdateBar(target, targetedBy)
    if updated[guid] then
       if targetedBy then
 	 local tti = tooltipInfo[guid]
-	 if not tti.targets[targetedBy] then
+	 if tti and not tti.targets[targetedBy] then
 	    tti.targets[targetedBy] = true
 	    updated[guid] = updated[guid] + 1
 	 end
@@ -843,7 +770,7 @@ function mod:MoveIconTo(icon, frame, target)
    local otherparent = db[target == "focus" and "target" or "focus"] and othericon:GetParent()
    
    if db[target] then
-      icon:SetPoint("LEFT", frame.bar, "RIGHT", -4, 0)
+      icon:SetPoint("LEFT", frame.bar, "RIGHT", -6, 0)
       icon:SetParent(frame.bar)
       icon:Show() 
    else 
@@ -1055,21 +982,18 @@ end
 
 function mod:ApplyProfile()
    -- configure based on saved data
-   mod.frame:ClearAllPoints()
-   if db.point then
-      db.point[2] = UIParent
-      mod.frame:SetPoint(unpack(db.point))
-   else
-      mod.frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)
-   end
---   if db.locked then bars:Lock() else bars:Unlock() end
    mod:SetTexture()
    mod:SetFont()
    mod:SetSize()
    mod:SetBarColors()
    mod:FixBackdrop()
+   mod:FixAnchorVisibility()
    mod.frame:SetScale(db.scale)
+   mod.handle:SetScale(db.scale)
+   mod:ToggleLocked(db.locked)
    mod:SortBars()
+   mod:LoadPosition()
+   mod:SetHandlePoints()
 end
 
 
@@ -1078,6 +1002,7 @@ function mod:SetSize()
    for _, frame in ipairs(mod.bars) do
       frame:Resize(lbs)
    end
+   local fw = mod.frame:GetWidth()
    mod:SortBars()
    focusIcon:SetWidth(db.height)
    focusIcon:SetHeight(db.height)
@@ -1108,8 +1033,10 @@ do
    -- This method makes sure the label templates match the existing data.
    function mod:FixLabelThemes()
       local l = db.labels or mod.get()
+      mod.labelSelect = {}
       db.labels = l
-      for id, data in pairs(labelThemes) do
+      for id, data in pairs(mod.labelThemes) do
+	 mod.labelSelect[id] = data.name
 	 if not l[id] then
 	    l[id] = data
 	 else
@@ -1119,8 +1046,13 @@ do
 		     if not l[id][key][lk] then
 			l[id][key][lk] = lv
 		     else
-			for labelKey, labelVal in pairs(val) do
+			for labelKey, labelVal in pairs(lv) do
 			   if upgradeKeys[labelKey] then
+			      l[id][key][lk][labelKey] = labelVal
+			      mod:Print("Setting", id, key, lk, labelKey, "to", labelVal)
+			   elseif ((labelVal == nil and l[id][key][lk][labelKey] ~= nil) or
+				   (labelVal ~= nil and l[id][key][lk][labelKey] == nil)) then
+			      -- Always update if it has changed from nil to non-nil or vice versa
 			      l[id][key][lk][labelKey] = labelVal
 			   end
 			end
@@ -1140,17 +1072,35 @@ function mod:ToggleConfigDialog()
    InterfaceOptionsFrame_OpenToCategory(mod.main)
 end
 
-function mod:ToggleLocked()
-   db.locked = not db.locked
---   if db.locked then bars:Lock() else bars:Unlock() end
-   if db.hideanchor then
-      -- Show anchor if we're unlocked but lock it again if we're locked
---      if db.locked then bars:HideAnchor() else bars:ShowAnchor() end
+function mod:FixAnchorVisibility()
+   if db.locked and db.hideanchor then
+      mod.handle:Hide()
+   else
+      mod.handle:Show()
    end
-   mod:SortBars()
-   mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
 end
 
+function mod:ToggleLocked(locked)
+   if locked ~= nil then
+      db.locked = locked
+   else
+      db.locked = not db.locked
+   end
+   mod:FixAnchorVisibility()
+   if db.locked then
+      mod.handle:EnableMouse(false)
+      if not db.showTooltip then
+	 mod:IterateBars("EnableMouse", false)
+      end
+   else
+      mod.handle:EnableMouse(true)
+      mod:IterateBars("EnableMouse", true)
+   end
+   mod:SortBars()
+   if locked == nil then
+      mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
+   end
+end
 
 function mod:SetBackgroundOpt(info, val)
    mod:SetOption(info, val)
@@ -1179,7 +1129,9 @@ mod.options = {
 	 showTooltip = {
 	    type = "toggle",
 	    width = "full",
-	    name = "Show mouseover tooltip", 
+	    name = "Show mouseover tooltip",
+	    desc = "If enabled a tooltip with information about the targets will be shown when you mouse over the bars. If disabled, MagicTargets bars will only intercept mouse clicks when they are unlocked.", 
+	    set = function(_, val) db.showTooltip = val mod:ToggleLocked(db.locked) end,
 	 },
 	 showDuration = {
 	    type = "toggle",
@@ -1191,21 +1143,21 @@ mod.options = {
 	    type = "toggle",
 	    name = "Show Focus Marker",
 	    desc = "Show a blue triangle indicating your current focus target.",
-	    set = function() db.focus = not db.focus mod:UpdateTarget("focus") end,
+	    set = function(_, val) db.focus = val mod:UpdateTarget("focus") end,
 	    order = 1
 	 },
 	 target = {
 	    type = "toggle",
 	    name = "Show Target Marker",
 	    desc = "Show a green triangle indicating your current target.",
-	    set = function() db.target = not db.target mod:UpdateTarget("target") end,
+	    set = function(_, val) db.target = val mod:UpdateTarget("target") end,
 	    order = 2
 	 },
 	 locked = {
 	    type = "toggle",
 	    name = "Lock Magic Targets bar positions.",
 	    width = "full",
-	    set = function(_, locked) db.locked = locked end,
+	    set = function(_, val) mod:ToggleLocked() end,
 	 },
 	 coloredNames = {
 	    type = "toggle",
@@ -1220,6 +1172,7 @@ mod.options = {
 	    set = function(_, value)
 		     db.growup = value
 		     mod:info("Growing bars %s.", db.growup and "up" or "down")
+		     mod:SetHandlePoints()
 		     mod:SortBars()
 		  end,
 	 },
@@ -1237,17 +1190,11 @@ mod.options = {
 	    type = "toggle",
 	    name = "Hide anchor when bars are locked.",
 	    width = "full",
-	    hidden = true,
-	    set = function()
-		     db.hideanchor = not db.hideanchor
-		     if db.locked and db.hideanchor then
-			mod:HideAnchor()
-		     else
-			mod:ShowAnchor()
-		     end
+	    set = function(_, val)
+		     db.hideanchor = val
+		     mod:FixAnchorVisibility()
 		     mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
 		  end,
-	    get = function() return db.hideanchor end
 	 },
 	 mmlisten = {
 	    type = "toggle",
@@ -1262,7 +1209,6 @@ mod.options = {
 			mod:info("Not listening to Magic Marker comm events.")
 			comm:UnregisterListener(mod, "MM")
 		     end
-
 		  end,
 	 },
 	 outsidegroup = {
@@ -1344,13 +1290,15 @@ mod.options = {
 	    name = "Scale Factor",
 	    width = "full",
 	    min = 0.01, max = 5, step = 0.05,
-	    set = function(_,val) db.scale = val mod.frame:SetScale(val) end,
+	    set = function(_,val) db.scale = val    mod.handle:SetScale(val) mod.frame:SetScale(val) end,
 	 }, 
       }
    },
    looks = {
       type = "group",
       name = "Font and Texture",
+      handler = mod,
+      get = "GetOption",
       order = 3,
       args = {
 	 texture = {
@@ -1360,16 +1308,14 @@ mod.options = {
 	    desc = "The background texture used for the bars.",
 	    values = AceGUIWidgetLSMlists.statusbar, 
 	    set = function(_,val) db.texture = val mod:SetTexture() end,
-	    get = function() return db.texture end,
 	    order = 3
 	 },
-	 fontname = {
+	 font = {
 	    type = "select",
 	    dialogControl = "LSM30_Font",
 	    name = "Font",
 	    desc = "Font used on the bars",
 	    values = AceGUIWidgetLSMlists.font, 
-	    get = function() return db.font  end,
 	    set = function(_,key) db.font = key  mod:SetFont() end,
 	    order = 1,
 	 },
@@ -1379,7 +1325,6 @@ mod.options = {
 	    name = "Font size",
 	    min = 1, max = 30, step = 1,
 	    set = function(_,val) db.fontsize = val mod:SetFont() end,
-	    get = function() return db.fontsize end,
 	    order = 2
 	 },
       },
@@ -1486,8 +1431,17 @@ mod.options = {
 	       "[target] - the name of the units target.\n"..
 	       "[type] - unit type (beast, elemental etc).\n"..
 	       "[cc] - information indicating type and duration of active crowd control methods on the unit.\n"..
-	       "[count] - number of players targeting the unit.\n\n", 
+	       "[count] - number of players targeting the unit.",
 	 },
+	 labelTheme = {
+	    type = "select",
+	    order = 2,
+	    name = "Label Layout",
+	    desc = "The label layout is used to select which basic set of labels you want. You can then configure the individual labels below.",
+	    get = "GetOption",
+	    values = function() return mod.labelSelect end, 
+	    set = "ChangeLabelTheme", 
+	 }
       },
       plugins = {}
    },
@@ -1503,11 +1457,29 @@ mod.options = {
 	 type = "range",
 	 name = "Label Width",
 	 desc = "The width of the label.",
-	 min = 1, max = 500, step = 1, 
+	 min = 0, max = 500, step = 1, 
 	 order = 2, 
 	 width = "full",
 	 hidden = "NoWidthLabel", 
-      },      
+      },
+      justifyV = {
+	 type = "select",
+	 name = "Vertical Justification",
+	 values = {
+	    TOP = "Top",
+	    CENTER = "Middle",
+	    BOTTOM = "Bottom"
+	 }
+      }, 
+      justifyH = {
+	 type = "select",
+	 name = "Horizontal Justification",
+	 values = {
+	    LEFT = "Left",
+	    CENTER = "Center",
+	    RIGHT = "Right"
+	 }
+      }
    }
 }
 
@@ -1549,12 +1521,26 @@ function mod:SetLabelOption(info, val)
 	 for _,frame in pairs(mod.bars) do
 	    mod:SetBarStrings(frame)
 	 end
+      elseif var == "justifyH" or var == "justifyV" then
+	 for _,frame in pairs(mod.bars) do
+	    mod:SetupBarLabels(frame)
+	 end
       else
 	 mod:SetSize()
       end
    end
 end
 
+function mod:ChangeLabelTheme(_, val)
+   db.labelTheme = val
+   local lbl = mod:GetLabelData()
+   for _,frame in pairs(mod.bars) do
+      mod:SetupBarLabels(frame)
+      mod:SetBarStrings(frame)
+   end
+   mod:SortBars()
+   mod:BuildLabelOptions() 
+end
 
 function mod:SetupOptions()
    local testbars = {
@@ -1570,16 +1556,17 @@ function mod:SetupOptions()
    mod.options.colors.args.testbars = testbars
    mod.options.labels.args.testbars = testbars
    mod.options.looks.args.testbars = testbars
+   mod.options.backgroundFrame.args.testbars = testbars
 
    mod:BuildLabelOptions()
    
    mod.main = mod:OptReg("Magic Targets", mod.options.general)
-   mod:OptReg(": Profiles", mod.options.profile, "Profiles")
    mod:OptReg(": bar sizing", mod.options.sizing, "Bar Sizing")
    mod:OptReg(": bar colors", mod.options.colors, "Bar Colors")
    mod:OptReg(": bar labels", mod.options.labels, "Bar Labels")
    mod:OptReg(": frame backdrop", mod.options.backgroundFrame, "Background Frame")
-   mod.text = mod:OptReg(": Font & Texture", mod.options.looks, "Font & Texture")
+   mod:OptReg(": Font & Texture", mod.options.looks, "Font & Texture")
+   mod.text = mod:OptReg(": Profiles", mod.options.profile, "Profiles")
    
 
    mod:OptReg("Magic Targets CmdLine", {
@@ -1597,10 +1584,13 @@ function mod:SetupOptions()
 end
 
 function mod:BuildLabelOptions()
-   local cfg = mod.options.labels.plugins
-   mod.clear(cfg)
+   local cfg = mod.options.labels.plugins   
    local lbl = mod:GetLabelData()
-   cfg.labels = mod.get()
+   cfg.labels = cfg.labels or mod.get()
+   for id, data in pairs(cfg.labels) do
+      data.args = nil
+   end
+   mod.clear(cfg.labels)
    for id, data in pairs(lbl.labels) do
       local lc = mod.get()
       lc.name = data.name
@@ -1617,8 +1607,12 @@ function mod:SortBars()
    local anchor
    local lbs = mod:GetLabelData()
    tsort(mod.bars, function(f1, f2) local a, b = (f1.bar.value/f1.bar.maxValue),  (f2.bar.value/f2.bar.maxValue) if a == b then return f1.guid > f2.guid else return a > b end end)
+   local start = 0
+   if #mod.bars > db.maxbars then
+      start = #mod.bars - db.maxbars
+   end
    for id, frame in pairs(mod.bars) do
-      if id > db.maxbars then
+      if id <= start then
 	 frame:Hide()
       else
 	 local fw, fh = lbs.width(frame), lbs.height(frame)
@@ -1648,21 +1642,70 @@ function mod:SortBars()
 	 frame:Show()
       end
    end
-   if h == 0 then
-      mod.frame:Hide()
-   else
-      mod.frame:Show()
+
+   if h > 0 then
       local p2 = db.padding*2
-      mod.frame:SetWidth(w+p2)
+      w = w+p2
+      db.lastWidth = w
+      mod.frame:SetWidth(w)
       mod.frame:SetHeight(h+p2)
+      if not mod.frame:IsShown() then
+	 mod.frame:Show()
+      end
+   elseif mod.frame:IsShown() then
+      mod.frame:Hide()
    end
+end
+
+function mod:SetHandlePoints()
+   mod.handle:ClearAllPoints()
+   if db.growup then
+      mod.handle:SetPoint("TOPLEFT", mod.frame, "BOTTOMLEFT")
+      mod.handle:SetPoint("TOPRIGHT", mod.frame, "BOTTOMRIGHT")
+   else
+      mod.handle:SetPoint("BOTTOMLEFT", mod.frame, "TOPLEFT")
+      mod.handle:SetPoint("BOTTOMRIGHT", mod.frame, "TOPRIGHT")
+   end
+    -- We change point from bottom to top and vice versa when changing
+   -- growth direction
+   mod:SavePosition()
+   mod:LoadPosition()
 end
 
 function mod:CreateFrame()
    mod.frame = CreateFrame("Frame", nil, UIParent)
    mod.frame:SetMovable(true)
-   local ih = min(db.width, db.height)
+   mod.frame:SetWidth(db.lastWidth or 220)
+   mod.frame:SetHeight(10)
+   local handle = CreateFrame("Frame", nil, Frame)
+   mod.handle = handle
    
+   handle:RegisterForDrag("LeftButton")
+   handle:EnableMouse(not db.locked)
+   handle:SetScript("OnDragStart", mod.OnDragStart)
+   handle:SetScript("OnDragStop", mod.OnDragStop)
+
+   mod:SetHandlePoints()
+
+   handle.label = handle:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+   handle.label:SetAllPoints()
+   handle.label:SetText("Raid Targets")
+   handle:SetBackdrop( {
+			 bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+			 edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+			 inset = 4,
+			 edgeSize = 8,
+			 tile = true,
+			 insets = {left = 2, right = 2, top = 2, bottom = 2}
+		      })
+   local c = db.backdropColors.backgroundColor
+   mod.handle:SetBackdropColor(c[1], c[2], c[3], c[4] > 0.2 and c[4] or 0.7)
+   c = db.backdropColors.borderColor
+   mod.handle:SetBackdropBorderColor(c[1], c[2], c[3], c[4] > 0.2 and c[4] or 0.7)
+   mod:SetHandleFont()
+
+   -- The icons to indicate current target and focus target
+   local ih = min(db.width, db.height)
    focusIcon = mod.frame:CreateTexture(nil, "OVERLAY")
    focusIcon:SetTexture([[Interface\Addons\MagicTargets\Textures\triangle.tga]])
    focusIcon:SetHeight(ih)
@@ -1678,6 +1721,51 @@ function mod:CreateFrame()
    targetIcon:Hide()
 end
 
+function mod:SavePosition()
+   local f = mod.frame
+   local s = f:GetEffectiveScale()
+   local shown = f:IsShown()
+   local l = f:GetLeft()
+   if not shown then f:Show() end
+   if l then
+      if db.growup then
+	 db.posy = f:GetBottom() * s
+	 db.anchor = "BOTTOMLEFT"
+      else
+	 db.posy =  f:GetTop() * s - UIParent:GetHeight()*UIParent:GetEffectiveScale()
+	 db.anchor = "TOPLEFT"
+      end
+      db.posx = l * s
+      db.point = nil
+   end
+   if not shown then f:Hide() end
+end
+
+
+function mod:LoadPosition()
+   local f = mod.frame
+   if db.point then
+      -- Old position, set it and save new position
+      db.point[2] = UIParent
+      f:SetPoint(unpack(db.point))
+      mod:SavePosition()
+      mod:LoadPosition()
+   else
+      local posx = db.posx
+      local posy = db.posy
+      local s = f:GetEffectiveScale()
+      if posx and posy then
+	 local anchor = db.anchor
+	 local f = mod.frame
+	 f:ClearAllPoints()
+	 if not anchor then  anchor = "TOPLEFT" end
+	 f:SetPoint(anchor, posx/s, posy/s)
+      else
+	 f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 300, -300)	 
+      end
+   end
+end
+
 do
    local function ExpandArea(frame, l, r, t, b)
       local fl = frame:GetLeft()
@@ -1691,6 +1779,12 @@ do
    local function SetLabelFont(label, newFont, newSize, newFlags)
       font, size, flags = label:GetFont()
       label:SetFont(newFont or font, newSize or size, newFlags or flags)
+   end
+   
+   function mod:SetHandleFont() 
+      local font = media:Fetch("font", db.font)
+      SetLabelFont(mod.handle.label, font, db.fontsize)
+      mod.handle:SetHeight(mod.handle.label:GetHeight()+10)
    end
    
    local function SetBarFont(frame)
@@ -1718,23 +1812,32 @@ do
    end
 
    function mod:GetLabelData()
-      return db.labels[db.labelTheme]
+      local lbl = db.labels[db.labelTheme]
+      return lbl
    end
    
    function mod:SetupBarLabels(frame)
       frame.labels = frame.labels or {}
       local lbs = mod:GetLabelData()
-      -- Create if needed
+      -- Create if needed, reset anchors otherwise
       for id, data in pairs(lbs.labels) do
-	 frame.labels[id] = frame.labels[id] or frame.bar:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+	 local f = frame.labels[id]
+	 if f then 
+	    f:ClearAllPoints()
+	    f:Hide()
+	 else
+	    frame.labels[id] = frame.bar:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
+	 end
       end
+      frame.icon:ClearAllPoints()
+      frame.bar:ClearAllPoints()
 
       -- Do the anchoring
       for id, data in pairs(lbs.labels) do
 	 local label = frame.labels[id]
-	 label:ClearAllPoints()
+	 label:Show()
 	 label:SetHeight(db.height)
-	 if data.anchor ~= "NONE" then
+	 if data.anchor then
 	    local anchor = mod:FindAnchorFrame(frame, data.anchorFrame, id)
 	    label:SetPoint(data.anchor, anchor, data.anchorTo, data.xoffset, 0)
 	 end
@@ -1748,6 +1851,12 @@ do
 	 label:SetJustifyH(data.justifyH)
 	 label:SetJustifyV(data.justifyV)
       end
+
+      frame.icon:SetPoint(lbs.icon.anchor,mod:FindAnchorFrame(frame, lbs.icon.anchorFrame, "[icon]"), lbs.icon.anchorTo, lbs.icon.offsetx, 0)
+      frame.bar:SetPoint(lbs.bar.anchor,mod:FindAnchorFrame(frame, lbs.bar.anchorFrame, "[bar]"), lbs.bar.anchorTo, lbs.bar.offsetx, 0)
+
+      frame:SetBarFont()
+      frame:Resize(lbs)
    end
 
    local function GetSize(frame)
@@ -1762,7 +1871,8 @@ do
       frame.bar:SetThickness(db.height)
       frame.icon:SetHeight(db.height)
       frame.icon:SetWidth(db.height)
-      for id,label in pairs(frame.labels) do
+      for id = 1, #lbs.labels do
+	 local label = frame.labels[id]
 	 local lw = lbs.labels[id].width
 	 label:SetHeight(db.height)
 	 if lw then 
@@ -1770,15 +1880,14 @@ do
 	 end
       end
    end
-
-
-   local function OnDragStart(self)
+   
+   function mod:OnDragStart()
       if db.locked then return end
       mod.frame:StartMoving()
    end
-
-   local function OnDragStop(self)
-      db.point = { mod.frame:GetPoint() }
+   
+   function mod:OnDragStop()
+      mod:SavePosition()      
       mod.frame:StopMovingOrSizing()
    end
    
@@ -1813,32 +1922,28 @@ do
       frame.icon:SetWidth(db.height)
       frame.icon:SetHeight(db.height)
 
-      mod:SetupBarLabels(frame)
-
       frame.SetBarFont   = SetBarFont      
       frame.GetSize = GetSize
       frame.Resize = ResizeBar
       frame.SetColor = SetColor 
-      frame:SetBarFont()
-      frame:SetColor("Normal")      
 
-      mod:SetTexture(frame)
       frame:SetScript("OnEnter", Bar_OnEnter);
       frame:SetScript("OnLeave", Bar_OnLeave);
-      frame:SetScript("OnDragStart", OnDragStart)
-      frame:SetScript("OnDragStop", OnDragStop)
+      frame:SetScript("OnDragStart", mod.OnDragStart)
+      frame:SetScript("OnDragStop", mod.OnDragStop)
       frame:RegisterForDrag("LeftButton")
-      frame:EnableMouse(true)
+      frame:EnableMouse(not db.locked or db.showTooltip)
     
       frame.guid = guid
 
       mod.bars[#mod.bars+1] = frame
       mod.unitbars[guid] = frame
 
-      frame.icon:SetPoint(lbs.icon.anchor,mod:FindAnchorFrame(frame, lbs.icon.anchorFrame, "[icon]"), lbs.icon.anchorTo, lbs.icon.offsetx, 0)
-      frame.bar:SetPoint(lbs.bar.anchor,mod:FindAnchorFrame(frame, lbs.bar.anchorFrame, "[bar]"), lbs.bar.anchorTo, lbs.bar.offsetx, 0)
-      frame:Resize(lbs)
+
+      mod:SetupBarLabels(frame)
+      mod:SetTexture(frame)
       mod:SortBars()
+      frame:SetColor("Normal")      
       return frame
    end
 end
@@ -1858,9 +1963,11 @@ do
 
    function mod:SetBarStrings(frame)
       local tti = tooltipInfo[frame.guid]
-      if tti then 
-	 local count = updated[frame.guid]
-	 tti.count =  count and count > 0 and count or nil
+      if tti then
+	 if not mod.testBars then
+	    local count = updated[frame.guid]
+	    tti.count =  count and count > 0 and count or nil
+	 end
 	 for id, data in ipairs(mod:GetLabelData().labels) do
 	    frame.labels[id]:SetText(tokenize(data.text, tti))
 	 end
@@ -1952,6 +2059,7 @@ function mod:FixBackdrop()
 
    bgFrame.edgeFile = media:Fetch("border", db.border)
    bgFrame.bgFile = media:Fetch("background", db.background)
+
    mod.frame:SetBackdrop(bgFrame)
    mod.frame:SetBackdropColor(unpack(db.backdropColors.backgroundColor))
    mod.frame:SetBackdropBorderColor(unpack(db.backdropColors.borderColor))
