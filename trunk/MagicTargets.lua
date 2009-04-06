@@ -1049,7 +1049,6 @@ do
 			for labelKey, labelVal in pairs(lv) do
 			   if upgradeKeys[labelKey] then
 			      l[id][key][lk][labelKey] = labelVal
-			      mod:Print("Setting", id, key, lk, labelKey, "to", labelVal)
 			   elseif ((labelVal == nil and l[id][key][lk][labelKey] ~= nil) or
 				   (labelVal ~= nil and l[id][key][lk][labelKey] == nil)) then
 			      -- Always update if it has changed from nil to non-nil or vice versa
