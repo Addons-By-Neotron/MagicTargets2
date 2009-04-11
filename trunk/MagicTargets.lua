@@ -45,7 +45,10 @@ local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
 local comm = LibStub("MagicComm-1.0")
 
+local GetItemInfo = GetItemInfo
 local GetSpellInfo = GetSpellInfo
+local GetInventoryItemLink = GetInventoryItemLink
+local UnitClassification = UnitClassification
 local UnitBuff = UnitBuff
 local UnitLevel = UnitLevel
 local UnitHealth = UnitHealth
@@ -74,9 +77,15 @@ local tremove = table.remove
 local tsort = table.sort
 local time = time
 local type = type
+local ipairs = ipairs
+local max = max
+local gsub = gsub
+local CreateFrame = CreateFrame
+local UIParent = UIParent
 local pairs = pairs
 local min = min
 local tostring = tostring
+local tonumber = tonumber
 local next = next
 local sort = sort
 local select = select
@@ -836,8 +845,10 @@ function mod:OnAssignData(data)
    mmtargets = data
    self:UpdateBars()
    for id,data in pairs(mmtargets) do
-      mod.unitbars[id]:SetColor(data.cc)
-      mod:AddTooltipData(id, data.name)
+      if mod.unitbars[id] then
+	 mod.unitbars[id]:SetColor(data.cc)
+	 mod:AddTooltipData(id, data.name)
+      end
    end
 end
 
@@ -848,7 +859,7 @@ function mod:OnCommMarkV2(mark, guid, _, name)
       mod:AddTooltipData(guid, name)
    end
    for id, frame in pairs(mod.unitbars) do
-      if id ~= guid and bar.mark == mark then
+      if id ~= guid and frame.mark == mark then
 	 mod:SetIcon(frame.bar)
 	 if mmtargets[id] then
 	    mmtargets[id].mark = nil
@@ -904,6 +915,23 @@ end
 
 local bit_band = bit.band
 local sub = string.sub
+local COMBATLOG_OBJECT_AFFILIATION_MINE, 
+COMBATLOG_OBJECT_AFFILIATION_PARTY, 
+COMBATLOG_OBJECT_AFFILIATION_RAID,
+COMBATLOG_OBJECT_REACTION_FRIENDLY,
+COMBATLOG_OBJECT_TYPE_GUARDIAN,
+COMBATLOG_OBJECT_TYPE_NPC,
+COMBATLOG_OBJECT_TYPE_PET,
+COMBATLOG_OBJECT_TYPE_PLAYER = COMBATLOG_OBJECT_AFFILIATION_MINE, 
+COMBATLOG_OBJECT_AFFILIATION_PARTY, 
+COMBATLOG_OBJECT_AFFILIATION_RAID,
+COMBATLOG_OBJECT_REACTION_FRIENDLY,
+COMBATLOG_OBJECT_TYPE_GUARDIAN,
+COMBATLOG_OBJECT_TYPE_NPC,
+COMBATLOG_OBJECT_TYPE_PET,
+COMBATLOG_OBJECT_TYPE_PLAYER
+
+
 
 local function GetFlagInfo(flags)
    return
@@ -1676,7 +1704,7 @@ function mod:CreateFrame()
    mod.frame:SetMovable(true)
    mod.frame:SetWidth(db.lastWidth or 220)
    mod.frame:SetHeight(10)
-   local handle = CreateFrame("Frame", nil, Frame)
+   local handle = CreateFrame("Frame", nil, UIParent)
    mod.handle = handle
    
    handle:RegisterForDrag("LeftButton")
@@ -1776,7 +1804,7 @@ do
    end
 
    local function SetLabelFont(label, newFont, newSize, newFlags)
-      font, size, flags = label:GetFont()
+      local font, size, flags = label:GetFont()
       label:SetFont(newFont or font, newSize or size, newFlags or flags)
    end
    
