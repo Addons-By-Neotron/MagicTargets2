@@ -1794,15 +1794,6 @@ function mod:LoadPosition()
 end
 
 do
-   local function ExpandArea(frame, l, r, t, b)
-      local fl = frame:GetLeft()
-      local fr = frame:GetRight()
-      local il, ir
-      if fl and fl > 0 and fl < l then l = fl il = true end
-      if fr and fr > 0 and fr > r then r = fr ir = true end
-      return l, r, il, ir
-   end
-
    local function SetLabelFont(label, newFont, newSize, newFlags)
       local font, size, flags = label:GetFont()
       label:SetFont(newFont or font, newSize or size, newFlags or flags)
@@ -1941,7 +1932,6 @@ do
 	 frame.bar = frame.bar or mod:NewSimpleBar(frame, current, maxVal, db.width, db.height)
       end
       
-      -- Set up the left/right/center labels. Yes, given sufficiently long text, they can overlap
       frame:SetHeight(db.height)
       frame:SetWidth(db.width*2)
 
