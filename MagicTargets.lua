@@ -27,7 +27,7 @@ if not LibStub:GetLibrary("LibBars-1.0", true) then
    LoadAddOn("LibBars-1.0") -- hrm..
 end
 
-MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", --, "LibBars-1.0", 
+MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibMagicUtil-1.0", 
 						"AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
 
 -- Silently fail embedding if it doesn't exist
@@ -194,6 +194,7 @@ local defaults = {
       fontsize = 8,
       width = 150,
       height = 12,
+      spacing = 2, 
       fadebars = false,
       HideMinimapButton = false,
       showTooltip = true,
@@ -1129,20 +1130,24 @@ function mod:ToggleLocked(locked)
    end
 end
 
+
+function mod:OnOptionChanged(var, val)
+   if var == "maxbars"  or var == "spacing" or var == "padding" then
+      mod:SortBars()
+   elseif var == "height" or var == "width" then
+      mod:SetSize()
+   elseif var == "scale" then
+      mod.handle:SetScale(val)
+      mod.frame:SetScale(val)
+      mod:LoadPosition()
+   end
+end
+
 function mod:SetBackgroundOpt(info, val)
    mod:SetOption(info, val)
    mod:FixBackdrop()
    mod:SortBars()
 end
-
-function mod:SetOption(info, val)
-   db[info[#info]] = val
-end
-
-function mod:GetOption(info)
-   return db[info[#info]]
-end
-
 
 mod.options = { 
    general = {
@@ -1283,44 +1288,6 @@ mod.options = {
 	 }
       }
    },
-   sizing = {
-      type = "group",
-      name = "Bar Size",
-      handler = mod,
-      get = "GetOption",
-      order = 4,
-      args = {
-	 maxbars  = {
-	    type = "range",
-	    min = 1, max = 100, step = 1,
-	    name = "Maximum number of bars",
-	    width="full",
-	    order = 0,
-	    set = function(var, val) db.maxbars = val mod:SortBars() end,
-	 },
-	 height = {
-	    type = "range",
-	    name = "Bar Height",
-	    width = "full",
-	    min = 1, max = 50, step = 1,
-	    set = function(_,val) db.height = val mod:SetSize() end,
-	 }, 
-	 width = {
-	    type = "range",
-	    name = "Bar Width",
-	    width = "full",
-	    min = 1, max = 300, step = 1,
-	    set = function(_,val) db.width = val mod:SetSize() end,
-	 }, 
-	 scale = {
-	    type = "range",
-	    name = "Scale Factor",
-	    width = "full",
-	    min = 0.01, max = 5, step = 0.05,
-	    set = function(_,val) db.scale = val    mod.handle:SetScale(val) mod.frame:SetScale(val) end,
-	 }, 
-      }
-   },
    looks = {
       type = "group",
       name = "Font and Texture",
@@ -1356,87 +1323,6 @@ mod.options = {
 	 },
       },
    },
-   backgroundFrame = {
-      type = "group",
-      name = "Background Frame",
-      order = 30,
-      handler = mod,
-      set = "SetBackgroundOpt",
-      get = "GetOption",       
-      args = {
-	 background = {
-	    type = "select",
-	    dialogControl = "LSM30_Background",
-	    name = "Background Texture",
-	    desc = "The background texture used for the background frame.", 
-	    order = 20,
-	    values = AceGUIWidgetLSMlists.background, 
-	 },
-	 backgroundColor = {
-	    type = "color",
-	    name = "Background Color",
-	    hasAlpha = true,
-	    set = "SetBackdropColorOpt",
-	    get = "GetBackdropColorOpt",
-	    order = 30,
-	 },
-	 spacer1 = {
-	    type = "description",
-	    width = "full",
-	       name = "",
-	    order = 35,
-	 },
-	 border = {
-	    type = "select",
-	    dialogControl = "LSM30_Border",
-	    name = "Border Texture",
-	    desc = "The border texture used for the background frame.",
-	    order = 40,
-	    values = AceGUIWidgetLSMlists.border, 
-	 },
-	 borderColor = {
-	    type = "color",
-	    name = "Border color",
-	    hasAlpha = true,
-	    set = "SetBackdropColorOpt",
-	    get = "GetBackdropColorOpt",
-	    order = 50,
-	 },
-	 spacer2 = {
-	    type = "description",
-	    width = "full",
-	    name = "",
-	    order = 55,
-	 },
-	 edgeSize = {
-	    type = "range",
-	    name = "Edge size",
-	    desc = "Width of the border.",
-	    min = 1, max = 50, step = 0.1,
-	 },
-	 padding = {
-	    type = "range",
-	    name = "Padding",
-	    desc = "Number of pixels to insert between the background frame edge and the bars.",
-	    min = 0, max = 50, step = 0.1,
-	 },
-	 tile = {
-	    type = "toggle",
-	    name = "Tile Background",
-	    desc = "Whether or not to tile the background texture.",
-	    order = 100,
-	 },
-	 tileSize = {
-	    type = "range",
-	    name = "Tile Size",
-	    desc = "The size in pixels of the background tiles.",
-	    min = 1, max = 200, step = 0.1, 
-	    order = 110,
-	    disabled = function() return not db.tile end,
-	 },
-      }
-   },
-   
    labels = {
       type = "group",
       name = "Labels",
@@ -1529,6 +1415,7 @@ function mod:NoWidthLabel(info)
    local var, parent = info[#info], tonumber(info[#info-1])
    return db.labels[db.labelTheme].labels[tonumber(parent)].width == nil
 end
+
 function mod:GetLabelOption(info)
    local var, parent = info[#info], info[#info-1]
    if parent == "labels" then
@@ -1579,6 +1466,10 @@ function mod:SetupOptions()
       set = function() mod:ToggleTestBars() end, 
       get = function() return mod.testBars end,
    }
+   mod.options.backgroundFrame = mod:GetConfigTemplate("background")
+   mod.options.sizing = mod:GetConfigTemplate("barsize")
+   mod.options.sizing.order = 4
+   mod.options.backgroundFrame.order = 10
    mod.options.sizing.args.testbars = testbars
    mod.options.colors.args.testbars = testbars
    mod.options.labels.args.testbars = testbars
@@ -1646,20 +1537,20 @@ function mod:SortBars()
 	 frame:ClearAllPoints()
 
 	 if fw > w then w = fw end
-	 h = h + fh
+	 h = h + fh + db.spacing
 
 	 if db.growup then
 	    if anchor then
-	       frame:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT")
-	       frame:SetPoint("BOTTOMRIGHT", anchor, "TOPRIGHT")
+	       frame:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, db.spacing)
+	       frame:SetPoint("BOTTOMRIGHT", anchor, "TOPRIGHT", 0, db.spacing)
 	    else
 	       frame:SetPoint("BOTTOMLEFT", mod.frame, "BOTTOMLEFT", db.padding, db.padding)
 	       frame:SetPoint("BOTTOMRIGHT", mod.frame, "BOTTOMRIGHT", -db.padding, db.padding)
 	    end
 	 else
 	    if anchor then
-	       frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT")
-	       frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT")
+	       frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -db.spacing)
+	       frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -db.spacing)
 	    else
 	       frame:SetPoint("TOPLEFT", mod.frame, "TOPLEFT", db.padding, -db.padding)
 	       frame:SetPoint("TOPRIGHT", mod.frame, "TOPRIGHT", -db.padding, -db.padding)
@@ -2037,47 +1928,6 @@ do
    end
 end
 
-function mod:SetBackdropColorOpt(arg, r, g, b, a)
-   local color = arg[#arg]
-   db.backdropColors[color][1] = r
-   db.backdropColors[color][2] = g
-   db.backdropColors[color][3] = b
-   db.backdropColors[color][4] = a
-   mod:FixBackdrop()
-end
+mod.GetOption = mod._GetOption
+mod.SetOption = mod._SetOption
 
-function mod:GetBackdropColorOpt(arg)
-   local color = arg[#arg]
-   return unpack(db.backdropColors[color])
-end
-
-function mod:FixBackdrop()   
-   local bgFrame = mod.frame:GetBackdrop()
-   if not bgFrame then
-      bgFrame = {
-	 insets = {left = 1, right = 1, top = 1, bottom = 1}
-      }
-   end
-
-   local edge = 0
-   local inset = 0
-   if db.border ~= "None" then
-      edge = db.edgeSize
-      inset = db.edgeSize / 4
-   end
-   bgFrame.edgeSize = edge
-   bgFrame.insets.left   = inset
-   bgFrame.insets.right  = inset
-   bgFrame.insets.top    = inset
-   bgFrame.insets.bottom = inset
-
-   bgFrame.tile = db.tile
-   bgFrame.tileSize = db.tileSize
-
-   bgFrame.edgeFile = media:Fetch("border", db.border)
-   bgFrame.bgFile = media:Fetch("background", db.background)
-
-   mod.frame:SetBackdrop(bgFrame)
-   mod.frame:SetBackdropColor(unpack(db.backdropColors.backgroundColor))
-   mod.frame:SetBackdropBorderColor(unpack(db.backdropColors.borderColor))
-end
