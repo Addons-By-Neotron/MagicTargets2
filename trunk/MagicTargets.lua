@@ -22,11 +22,6 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 -- 10:50 <@vhaarr> local ae = {}; AceLibrary("AceEvent-2.0"):embed(ae); ae:RegisterEvent("oRA_MainTankUpdate", function() --[[ update tanks ]] end)
 -- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
 
-
-if not LibStub:GetLibrary("LibBars-1.0", true) then
-   LoadAddOn("LibBars-1.0") -- hrm..
-end
-
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibMagicUtil-1.0", 
 						"AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
 
