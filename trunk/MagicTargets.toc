@@ -1,4 +1,4 @@
-## Interface: 30000
+## Interface: 30100
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Author: NeoTron
