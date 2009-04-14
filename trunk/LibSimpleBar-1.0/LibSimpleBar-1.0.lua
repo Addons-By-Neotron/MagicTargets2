@@ -125,7 +125,7 @@ function barPrototype:SetValue(value, maxValue)
    self.value = value 
    self.maxValue = maxValue or self.maxValue
 
-   if not self.maxValue or val > self.maxValue then
+   if not self.maxValue or value > self.maxValue then
       self.maxValue = value
    end
 
