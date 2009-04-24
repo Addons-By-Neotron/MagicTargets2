@@ -741,10 +741,13 @@ function mod:UpdateBars()
 		  frame:SetColor("Tank")
 	       end
 	    end
-
-	    -- This unit had no raid members targeting it
-	    if tooltipInfo[id] and not updated[id] then	       
-	       mod.clear(tooltipInfo[id].targets)
+	    
+	    local tti = tooltipInfo[id]
+	    if tti then
+	       if not updated[id] then -- This unit had no raid members targeting it
+		  mod.clear(tooltipInfo[id].targets)
+	       end
+	       tti.cc = ccstrings[id]
 	    end
 	    
 	    if frame.tooltipShowing then
