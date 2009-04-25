@@ -1123,7 +1123,7 @@ function mod:ToggleLocked(locked)
       mod:IterateBars("EnableMouse", true)
    end
    mod:SortBars()
-   if locked == nil then
+   if locked == nil and mod.hasInfo then
       mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
    end
 end
@@ -1201,7 +1201,7 @@ mod.options = {
 	    width = "full",
 	    set = function(_, value)
 		     db.growup = value
-		     mod:info("Growing bars %s.", db.growup and "up" or "down")
+		     if mod.hasInfo then mod:info("Growing bars %s.", db.growup and "up" or "down") end
 		     mod:SetHandlePoints()
 		     mod:SortBars()
 		  end,
@@ -1223,7 +1223,7 @@ mod.options = {
 	    set = function(_, val)
 		     db.hideanchor = val
 		     mod:FixAnchorVisibility()
-		     mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown")
+		     if mod.hasInfo then mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown") end
 		  end,
 	 },
 	 mmlisten = {
@@ -1234,9 +1234,9 @@ mod.options = {
 		     db.mmlisten = not db.mmlisten
 		     if db.mmlisten then
 			comm:RegisterListener(mod, "MM", true)
-			mod:info("Listening to Magic Marker comm events.")
+			if mod.hasInfo then mod:info("Listening to Magic Marker comm events.") end
 		     else
-			mod:info("Not listening to Magic Marker comm events.")
+			if mod.hasInfo then mod:info("Not listening to Magic Marker comm events.") end
 			comm:UnregisterListener(mod, "MM")
 		     end
 		  end,
@@ -1248,7 +1248,7 @@ mod.options = {
 	    set = function()
 		     db.outsidegroup = not db.outsidegroup
 		     mod:ScheduleGroupScan()
-		     mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled")
+		     if mod.hasInfo then mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled") end
 		  end,
 	 },
       },
