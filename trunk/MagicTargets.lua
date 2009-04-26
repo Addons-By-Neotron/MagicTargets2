@@ -173,6 +173,7 @@ local iconPath = [[Interface\AddOns\MagicTargets\Textures\%d.tga]]
 
 local defaults = {
    profile = {
+      showNotTargetedBy = false, 
       showDuration = true,
       focus = true,
       coloredNames = true,
@@ -535,11 +536,20 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 tooltip:AddDoubleLine("Crowd Control:", tti.cc, nil, nil, nil, 1, 1, 1)
       end
       tooltip:AddLine(" ")
-      if next(tti.targets) then 
-	 tooltip:AddLine("Currently targeted by:", 0.85, 0.85, 0.1);
+      if next(tti.targets) then
 	 local sorted = mod.get()
-	 for id in pairs(tti.targets) do
-	    sorted[#sorted+1] = id
+	 if db.showNotTargetedBy then
+	    tooltip:AddLine("Not targeted by:", 0.85, 0.85, 0.1);
+	    for id in pairs(ingroup) do
+	       if not tti.targets[id] then
+		  sorted[#sorted+1] = id
+	       end
+	    end
+	 else
+	    tooltip:AddLine("Currently targeted by:", 0.85, 0.85, 0.1);
+	    for id in pairs(tti.targets) do
+	       sorted[#sorted+1] = id
+	    end
 	 end
 	 sort(sorted)
 	 if db.coloredNames then
@@ -681,7 +691,9 @@ function mod:UpdateBars()
       end
    end
    -- Update raid targeting information, adding bars as necessary
-   self:IterateRaid(self.UpdateBar, true)
+   for name in pairs(ingroup) do 
+      self:UpdateBar(name)
+   end
    -- If we have a pet, let's see what he's targeting
    self:UpdateBar("pettarget")
    
@@ -1192,6 +1204,13 @@ mod.options = {
 	 coloredNames = {
 	    type = "toggle",
 	    name = "Use class colors in tooltip.",
+	    width = "full",
+	    hidden = function() return not db.showTooltip end
+	 },
+	 showNotTargetedBy = {
+	    type = "toggle",
+	    name = "Show who's not targeting a mob in the tooltip.",
+	    desc = "If enabled, all party or raid members not targeting the player will be shown in the tooltip. Otherwise people targeting the mob will be shown.", 
 	    width = "full",
 	    hidden = function() return not db.showTooltip end
 	 },
