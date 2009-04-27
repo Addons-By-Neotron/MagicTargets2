@@ -323,11 +323,11 @@ function mod:OnDisable()
 end
 
 local unitTanks = {}
-
+local shieldSubType = select(7, GetItemInfo(40700)) -- badge shield, always available
 local function hasShieldEquipped(unit) 
-      local shieldLink = GetInventoryItemLink("target", 17)
+      local shieldLink = GetInventoryItemLink(unit, 17)
       if shieldLink then
-	 return select(9, GetItemInfo(shieldLink)) == "INVTYPE_SHIELD"
+	 return select(7, GetItemInfo(shieldLink)) == shieldSubType
       else
 	 return false
       end
