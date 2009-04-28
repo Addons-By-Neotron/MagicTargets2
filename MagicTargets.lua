@@ -336,7 +336,8 @@ do
    local tankAura = {
       PALADIN = { [GetSpellInfo(25780)] = true }, 
       WARRIOR = hasShieldEquipped, 
-      DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }
+      DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }, 
+      DEATHKNIGHT = { [GetSpellInfo(48263)] = true }, -- yay, frost presence is visible!
    }
    
    
