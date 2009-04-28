@@ -407,7 +407,7 @@ do
 	 mod:OnCommResetV2() -- make sure the magic marker bars are gone
       end
       if isInGroup or db.outsidegroup then
-	 mod:IterateRaid(function(self, unitname) if unitname then ingroup[unitname] = true end end)
+	 mod:IterateRaid(function(self, unittarget, unitname) if unitname then ingroup[unitname] = unittarget  end end, true)
 	 if not addonEnabled then
 	    addonEnabled = true
 	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -691,8 +691,8 @@ function mod:UpdateBars()
       end
    end
    -- Update raid targeting information, adding bars as necessary
-   for name in pairs(ingroup) do 
-      self:UpdateBar(name)
+   for name, target in pairs(ingroup) do
+      self:UpdateBar(target, name)
    end
    -- If we have a pet, let's see what he's targeting
    self:UpdateBar("pettarget")
