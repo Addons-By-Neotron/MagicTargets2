@@ -415,6 +415,7 @@ do
 	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget", "target")
 	    self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
 	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
+	    self:RegisterEvent("UNIT_HEALTH")
 	    self:RegisterEvent("PLAYER_REGEN_ENABLED")
 	    self:RegisterEvent("PLAYER_REGEN_DISABLED")
 	    self:ClearCombatData()
@@ -428,6 +429,7 @@ do
       else
 	 if addonEnabled then
 	    addonEnabled = false
+	    self:UnregisterEvent("UNIT_HEALTH")
 	    self:UnregisterEvent("PLAYER_REGEN_ENABLED")
 	    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	    self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -586,6 +588,24 @@ local function Bar_OnLeave()
    if not db.showTooltip  then return end
    GameTooltip:Hide()
    this.tooltipShowing = nil
+end
+
+function mod:UNIT_HEALTH(event, unit)
+   local guid = UnitGUID(unit)
+   local frame = mod.unitbars[guid]
+   if not frame then return end
+   local tti = tooltipInfo[guid]
+   local uh, uhm = UnitHealth(unit), UnitHealthMax(unit)
+   
+   if tti then
+      tti.health = uh
+      tti.maxhealth = uhm
+      tti["%"] = ceil(100*uh / uhm)
+   end
+
+   if frame.bar.value ~= uh or frame.bar.maxvalue ~= uhm then
+      frame.bar:SetValue(uh, uhm)
+   end
 end
 
 
@@ -901,7 +921,7 @@ function mod:PLAYER_REGEN_ENABLED()
    mod:RemoveAllBars() 
    self:ClearCombatData()
    if addonEnabled then
-      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 5)
+      repeatTimer = self:ScheduleRepeatingTimer("UpdateBars", 2.5)
 --      mod:debug("Scheduling 5 second repeating timer.")
    end
 end
@@ -981,7 +1001,8 @@ function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
    
    if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
       died[tguid] = true
-      self:RemoveBar(tguid)
+      mod:RemoveBar(tguid)
+      mod:SortBars();
    elseif event == "SPELL_AURA_APPLIED" or event == "SPELL_AURA_REFRESH" then
       -- record crowd control
       local spellData = ccspells[spellid]
