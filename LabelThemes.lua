@@ -19,7 +19,7 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 
 **********************************************************************
 ]]
-
+local L = LibStub("AceLocale-3.0"):GetLocale("MagicTargetsTheme")
 local mod = MagicTargets
 mod.labelThemes = {
    default = {
@@ -45,7 +45,7 @@ mod.labelThemes = {
       },
       labels = {
 	 {
-	    name = "Left Label #1", 
+	    name = L["Left Label #1"], 
 	    text = "[count]",
 	    anchor = "LEFT",
 	    anchorTo = "LEFT",
@@ -56,7 +56,7 @@ mod.labelThemes = {
 	    justifyV = "CENTER", 
 	 },
 	 {
-	    name = "Left Label #2", 
+	    name = L["Left Label #2"], 
 	    text = "[name]",
 	    anchor = "LEFT",
 	    anchorTo = "RIGHT", 
@@ -67,7 +67,7 @@ mod.labelThemes = {
 	    justifyV = "CENTER",
 	 },
 	 {
-	    name = "Bar Label", 
+	    name = L["Bar Label"], 
 	    text = "[cc]",
 	    anchor = "TOPRIGHT",
 	    anchorTo = "TOPRIGHT",
@@ -81,7 +81,7 @@ mod.labelThemes = {
 	    justifyV = "CENTER", 
 	 },
 	 {
-	    name = "Right Label", 
+	    name = L["Right Label"], 
 	    text = "[%]%",
 	    anchor = "LEFT",
 	    anchorTo = "RIGHT",
@@ -120,7 +120,7 @@ mod.labelThemes = {
       },
       labels = {
 	 {
-	    name = "Left Bar Label", 
+	    name = L["Left Bar Label"], 
 	    text = "[name]",
 	    anchor = "RIGHT",
 	    anchorTo = "RIGHT",
@@ -134,7 +134,7 @@ mod.labelThemes = {
 	    justifyV = "CENTER", 
 	 },
 	 {
-	    name = "Right Bar Label", 
+	    name = L["Right Bar Label"], 
 	    text = "[count][cc]",
 	    anchor = "RIGHT",
 	    anchorTo = "RIGHT",
@@ -148,7 +148,7 @@ mod.labelThemes = {
 	    justifyV = "CENTER", 
 	 },
 	 {
-	    name = "Right Label", 
+	    name = L["Right Label"], 
 	    text = "[%]%",
 	    anchor = "LEFT",
 	    anchorTo = "RIGHT",

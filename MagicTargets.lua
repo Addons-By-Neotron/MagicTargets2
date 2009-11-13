@@ -33,7 +33,7 @@ local Logger = LibStub("LibLogger-1.0", true)
 if Logger then
    Logger:Embed(MagicTargets)
 end
-
+local L = LibStub("AceLocale-3.0"):GetLocale("MagicTargets")
 local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
@@ -226,8 +226,8 @@ function mod:OnInitialize()
 			   type =  "launcher", 
 			   label = "Magic Targets",
 			   icon = [[Interface\AddOns\MagicTargets\target.tga]],
-			   tooltiptext = ("|cffffff00Left click|r to open the configuration screen.\n"..
-					  "|cffffff00Right click|r to toggle the Magic Target window lock."), 
+			   tooltiptext = (L["|cffffff00Left click|r to open the configuration screen.\n"]..
+					  L["|cffffff00Right click|r to toggle the Magic Target window lock."]), 
 			   OnClick = function(clickedframe, button)
 					if button == "LeftButton" then
 					   mod:ToggleConfigDialog()
@@ -263,8 +263,8 @@ local function BarSortFunc(a, b)
    local bmm = mmtargets[b.name]
    local av = 0
    local bv = 0
-   if amm then av = 1000+(amm.val or 0)+(amm.cc == "Tank" and 100 or 0) else av = a.value end
-   if bmm then bv = 1000+(bmm.val or 0)+(bmm.cc == "Tank" and 100 or 0) else bv = b.value end
+   if amm then av = 1000+(amm.val or 0)+(amm.cc == L["Tank"] and 100 or 0) else av = a.value end
+   if bmm then bv = 1000+(bmm.val or 0)+(bmm.cc == L["Tank"] and 100 or 0) else bv = b.value end
    if av == bv then return a.name > b.name else return av > bv end
 end
 
@@ -507,11 +507,11 @@ end
 local updated = {}
 local tanked  = {}
 
-local lvlFmt = "Level %d %s"
+local lvlFmt = L["Level %d %s"]
 local colorToText = {
-   CC = "Crowd Controlled",
-   Tank = "Tanked",
-   Notank = "Untanked",
+   CC = L["Crowd Controlled"],
+   Tank = L["Tanked"],
+   Notank = L["Untanked"],
 }
 
 local function Bar_UpdateTooltip(self, tooltip)
@@ -521,35 +521,35 @@ local function Bar_UpdateTooltip(self, tooltip)
       tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
       tooltip:AddLine(fmt(lvlFmt, tti.level, tti.type), 1, 1, 1)
       tooltip:AddLine(" ")
-      tooltip:AddDoubleLine("Health:", fmt("%.0f%%", 100*self.bar.value/self.bar.maxValue), nil, nil, nil, 1, 1, 1)
+      tooltip:AddDoubleLine(L["Health:"], fmt("%.0f%%", 100*self.bar.value/self.bar.maxValue), nil, nil, nil, 1, 1, 1)
       if tti.target then
-	 tooltip:AddDoubleLine("Target:", tti.target, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine(L["Target:"], tti.target, nil, nil, nil, 1, 1, 1)
       end
       if self.color and colorToText[self.color] and InCombatLockdown() then
 	 local c = db.colors[self.color]
-	 tooltip:AddDoubleLine("Status:", colorToText[self.color], nil, nil, nil, c[1], c[2], c[3])
+	 tooltip:AddDoubleLine(L["Status:"], colorToText[self.color], nil, nil, nil, c[1], c[2], c[3])
       else
 	 local c = db.colors.Normal
-	 tooltip:AddDoubleLine("Status:", "Idle", nil, nil, nil, c[1], c[2], c[3])
+	 tooltip:AddDoubleLine(L["Status:"], L["Idle"], nil, nil, nil, c[1], c[2], c[3])
       end
       if mmtargets[self.guid] then
-	 tooltip:AddDoubleLine("MagicMarker Assigment:", mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine(L["MagicMarker Assigment:"], mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
       end
       if tti.cc then
-	 tooltip:AddDoubleLine("Crowd Control:", tti.cc, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine(L["Crowd Control:"], tti.cc, nil, nil, nil, 1, 1, 1)
       end
       tooltip:AddLine(" ")
       if next(tti.targets) then
 	 local sorted = mod.get()
 	 if db.showNotTargetedBy then
-	    tooltip:AddLine("Not targeted by:", 0.85, 0.85, 0.1);
+	    tooltip:AddLine(L["Not targeted by:"], 0.85, 0.85, 0.1);
 	    for id in pairs(ingroup) do
 	       if not tti.targets[id] then
 		  sorted[#sorted+1] = id
 	       end
 	    end
 	 else
-	    tooltip:AddLine("Currently targeted by:", 0.85, 0.85, 0.1);
+	    tooltip:AddLine(L["Currently targeted by:"], 0.85, 0.85, 0.1);
 	    for id in pairs(tti.targets) do
 	       sorted[#sorted+1] = id
 	    end
@@ -563,14 +563,14 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 tooltip:AddLine(tconcat(sorted, ", "), 1, 1, 1, 1)
 	 mod.del(sorted)
       else
-	 tooltip:AddLine("Not targeted by anyone.");
+	 tooltip:AddLine(L["Not targeted by anyone."]);
       end
    else
       if tti.name then
 	 tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)	 
 	 tooltip:AddLine(" ")
       end
-      tooltip:AddLine("Not targeted by anyone.");
+      tooltip:AddLine(L["Not targeted by anyone."]);
    end
    tooltip:Show()
 end
@@ -633,7 +633,7 @@ function mod:UpdateBar(target, targetedBy)
    if UnitCanAttack("player", target) and not UnitIsDead(target)
       and not ingroup[unitname] and not UnitPlayerControlled(target) then
 	 -- and not UnitIsPlayer(target) then
-      if type == "Critter" or type == "Totem"  or (db.eliteonly and UnitClassification(target) == "normal") then
+      if type == L["Critter"] or type == L["Totem"]  or (db.eliteonly and UnitClassification(target) == "normal") then
 	 trivial[guid] = true
 	 self:RemoveBar(guid)
 	 return
@@ -1158,7 +1158,7 @@ function mod:ToggleLocked(locked)
    end
    mod:SortBars()
    if locked == nil and mod.hasInfo then
-      mod:info("The bars are now %s.", db.locked and "locked" or "unlocked")
+      mod:info( L["The bars are now %s."], db.locked and "locked" or "unlocked")
    end
 end
 
@@ -1184,7 +1184,7 @@ end
 mod.options = { 
    general = {
       type = "group",
-      name = "General",
+      name = L["General"],
       order = 1,
       handler = mod,
       get = "GetOption",
@@ -1193,143 +1193,143 @@ mod.options = {
 	 showTooltip = {
 	    type = "toggle",
 	    width = "full",
-	    name = "Show mouseover tooltip",
-	    desc = "If enabled a tooltip with information about the targets will be shown when you mouse over the bars. If disabled, MagicTargets bars will only intercept mouse clicks when they are unlocked.", 
+	    name = L["Show mouseover tooltip"],
+	    desc = L["If enabled a tooltip with information about the targets will be shown when you mouse over the bars. If disabled, MagicTargets bars will only intercept mouse clicks when they are unlocked."], 
 	    set = function(_, val) db.showTooltip = val mod:ToggleLocked(db.locked) end,
 	 },
 	 showDuration = {
 	    type = "toggle",
 	    width = "full",
-	    name = "Show crowd control duration on bars",
-	    desc = "When enabled, the estimated duration of crowd control spells will be shown on the bars. Note that due to lack of REFRESH events, the addon will not notice if a crowd control spell is reapplied before the previous one expires.",
+	    name = L["Show crowd control duration on bars"],
+	    desc = L["When enabled, the estimated duration of crowd control spells will be shown on the bars. Note that due to lack of REFRESH events, the addon will not notice if a crowd control spell is reapplied before the previous one expires."],
 	 },
 	 focus = {
 	    type = "toggle",
-	    name = "Show Focus Marker",
-	    desc = "Show a blue triangle indicating your current focus target.",
+	    name = L["Show Focus Marker"],
+	    desc = L["Show a blue triangle indicating your current focus target."],
 	    set = function(_, val) db.focus = val mod:UpdateTarget("focus") end,
 	    order = 1
 	 },
 	 target = {
 	    type = "toggle",
-	    name = "Show Target Marker",
-	    desc = "Show a green triangle indicating your current target.",
+	    name = L["Show Target Marker"],
+	    desc = L["Show a green triangle indicating your current target."],
 	    set = function(_, val) db.target = val mod:UpdateTarget("target") end,
 	    order = 2
 	 },
 	 locked = {
 	    type = "toggle",
-	    name = "Lock Magic Targets bar positions.",
+	    name = L["Lock Magic Targets bar positions."],
 	    width = "full",
 	    set = function(_, val) mod:ToggleLocked() end,
 	 },
 	 coloredNames = {
 	    type = "toggle",
-	    name = "Use class colors in tooltip.",
+	    name = L["Use class colors in tooltip."],
 	    width = "full",
 	    hidden = function() return not db.showTooltip end
 	 },
 	 showNotTargetedBy = {
 	    type = "toggle",
-	    name = "Show who's not targeting a mob in the tooltip.",
-	    desc = "If enabled, all party or raid members not targeting the player will be shown in the tooltip. Otherwise people targeting the mob will be shown.", 
+	    name = L["Show who's not targeting a mob in the tooltip."],
+	    desc = L["If enabled, all party or raid members not targeting the player will be shown in the tooltip. Otherwise people targeting the mob will be shown."], 
 	    width = "full",
 	    hidden = function() return not db.showTooltip end
 	 },
 	 growup = {
 	    type = "toggle",
-	    name = "Grow bars upwards.",
+	    name = L["Grow bars upwards."],
 	    width = "full",
 	    set = function(_, value)
 		     db.growup = value
-		     if mod.hasInfo then mod:info("Growing bars %s.", db.growup and "up" or "down") end
+		     if mod.hasInfo then mod:info(L["Growing bars %s."], db.growup and "up" or "down") end
 		     mod:SetHandlePoints()
 		     mod:SortBars()
 		  end,
 	 },
 	 eliteonly = {
 	    type = "toggle",
-	    name = "Filter out all non-elite mobs.",
+	    name = L["Filter out all non-elite mobs."],
 	    width = "full",
 	 },
 	 fadebars = {
 	    type = "toggle",
-	    name = "Fade bars as health decreases.",
+	    name = L["Fade bars as health decreases."],
 	    width = "full",
 	 },
 	 hideanchor = {
 	    type = "toggle",
-	    name = "Hide anchor when bars are locked.",
+	    name = L["Hide anchor when bars are locked."],
 	    width = "full",
 	    set = function(_, val)
 		     db.hideanchor = val
 		     mod:FixAnchorVisibility()
-		     if mod.hasInfo then mod:info("The anchor will be %s when the bars are locked.", db.hideanchor and "hidden" or "shown") end
+		     if mod.hasInfo then mod:info(L["The anchor will be %s when the bars are locked."], db.hideanchor and "hidden" or "shown") end
 		  end,
 	 },
 	 mmlisten = {
 	    type = "toggle",
-	    name = "Listen to Magic Marker target assignments.",
+	    name = L["Listen to Magic Marker target assignments."],
 	    width = "full",
 	    set = function()
 		     db.mmlisten = not db.mmlisten
 		     if db.mmlisten then
 			comm:RegisterListener(mod, "MM", true)
-			if mod.hasInfo then mod:info("Listening to Magic Marker comm events.") end
+			if mod.hasInfo then mod:info(L["Listening to Magic Marker comm events."]) end
 		     else
-			if mod.hasInfo then mod:info("Not listening to Magic Marker comm events.") end
+			if mod.hasInfo then mod:info(L["Not listening to Magic Marker comm events."]) end
 			comm:UnregisterListener(mod, "MM")
 		     end
 		  end,
 	 },
 	 outsidegroup = {
 	    type = "toggle",
-	    name = "Enable Magic Targets when not in a group.",
+	    name = L["Enable Magic Targets when not in a group."],
 	    width = "full",
 	    set = function()
 		     db.outsidegroup = not db.outsidegroup
 		     mod:ScheduleGroupScan()
-		     if mod.hasInfo then mod:info("MagicTargets will be %s when solo.", db.outsidegroup and "enabled" or "disabled") end
+		     if mod.hasInfo then mod:info(L["MagicTargets will be %s when solo."], db.outsidegroup and "enabled" or "disabled") end
 		  end,
 	 },
       },
    },
    colors = {
       type = "group",
-      name = "Colors",
+      name = L["Colors"],
       order = 9,
       set = SetColorOpt,
       get = GetColorOpt,
       args = {
 	 Tank = {
 	    type = "color",
-	    name = "Tank",
-	    desc = "Color used to indicate tanked targets. This is also used while soloing.",
+	    name = L["Tank"],
+	    desc = L["Color used to indicate tanked targets. This is also used while soloing."],
 	    hasAlpha = true, 
 	 },
 	 Normal = {
 	    type = "color",
-	    name = "Idle",
-	    desc = "Color used for inactove targets.",
+	    name = L["Idle"],
+	    desc = L["Color used for inactove targets."],
 	    hasAlpha = true, 
 	 },
 	 CC = {
 	    type = "color",
-	    name = "Crowd Controlled",
-	    desc = "Color used for crowd controlled targets.",
+	    name = L["Crowd Controlled"],
+	    desc = L["Color used for crowd controlled targets."],
 	    hasAlpha = true, 
 	 },
 	 Notank = {
 	    type = "color",
-	    name = "Untanked",
-	    desc = "Color used for targets that are currently not tanked or crowd controlled (aka the targets killing the DPS or healers).",
+	    name = L["Untanked"],
+	    desc = L["Color used for targets that are currently not tanked or crowd controlled (aka the targets killing the DPS or healers)."],
 	    hasAlpha = true, 
 	 }
       }
    },
    looks = {
       type = "group",
-      name = "Font and Texture",
+      name = L["Font and Texture"],
       handler = mod,
       get = "GetOption",
       order = 3,
@@ -1337,8 +1337,8 @@ mod.options = {
 	 texture = {
 	    type = "select",
 	    dialogControl = "LSM30_Statusbar",
-	    name = "Texture",
-	    desc = "The background texture used for the bars.",
+	    name = L["Texture"],
+	    desc = L["The background texture used for the bars."],
 	    values = AceGUIWidgetLSMlists.statusbar, 
 	    set = function(_,val) db.texture = val mod:SetTexture() end,
 	    order = 3
@@ -1346,8 +1346,8 @@ mod.options = {
 	 font = {
 	    type = "select",
 	    dialogControl = "LSM30_Font",
-	    name = "Font",
-	    desc = "Font used on the bars",
+	    name = L["Font"],
+	    desc = L["Font used on the bars"],
 	    values = AceGUIWidgetLSMlists.font, 
 	    set = function(_,key) db.font = key  mod:SetFont() end,
 	    order = 1,
@@ -1355,7 +1355,7 @@ mod.options = {
 	 fontsize = {
 	    order = 1, 
 	    type = "range",
-	    name = "Font size",
+	    name = L["Font size"],
 	    min = 1, max = 30, step = 1,
 	    set = function(_,val) db.fontsize = val mod:SetFont() end,
 	    order = 2
@@ -1364,7 +1364,7 @@ mod.options = {
    },
    labels = {
       type = "group",
-      name = "Labels",
+      name = L["Labels"],
       handler = mod,
       get = "GetLabelOption", 
       set = "SetLabelOption", 
@@ -1374,22 +1374,22 @@ mod.options = {
 	    type = "description",
 	    order = 1, 
 	    name =
-	       "These fields are used to set the text on and next to the bars. The following tokens will be replaced with relevant data:\n\n"..
-	       "[name] - the name of the unit.\n"..
-	       "[level] - the level of the unit.\n"..
-	       "[%] - health percentage of the unit.\n"..
-	       "[health] - absolute health of the unit.\n"..
-	       "[maxhealth] - the units maximum health.\n"..
-	       "[target] - the name of the units target.\n"..
-	       "[type] - unit type (beast, elemental etc).\n"..
-	       "[cc] - information indicating type and duration of active crowd control methods on the unit.\n"..
-	       "[count] - number of players targeting the unit.",
+	       L["These fields are used to set the text on and next to the bars. The following tokens will be replaced with relevant data:\n\n"]..
+	       L["[name] - the name of the unit.\n"]..
+	       L["[level] - the level of the unit.\n"]..
+	       L["[%] - health percentage of the unit.\n"]..
+	       L["[health] - absolute health of the unit.\n"]..
+	       L["[maxhealth] - the units maximum health.\n"]..
+	       L["[target] - the name of the units target.\n"]..
+	       L["[type] - unit type (beast, elemental etc).\n"]..
+	       L["[cc] - information indicating type and duration of active crowd control methods on the unit.\n"]..
+	       L["[count] - number of players targeting the unit."],
 	 },
 	 labelTheme = {
 	    type = "select",
 	    order = 2,
-	    name = "Label Layout",
-	    desc = "The label layout is used to select which basic set of labels you want. You can then configure the individual labels below.",
+	    name = L["Label Layout"],
+	    desc = L["The label layout is used to select which basic set of labels you want. You can then configure the individual labels below."],
 	    get = "GetOption",
 	    values = function() return mod.labelSelect end, 
 	    set = "ChangeLabelTheme", 
@@ -1400,15 +1400,15 @@ mod.options = {
    labelOptions = {
       text = {
 	 type = "input",
-	 name = "Label Text",
-	 desc = "The text for this label. Tokens are replaced as per the description above.",
+	 name = L["Label Text"],
+	 desc = L["The text for this label. Tokens are replaced as per the description above."],
 	 order = 1,
 	 width = "full",
       }, 
       width = {
 	 type = "range",
-	 name = "Label Width",
-	 desc = "The width of the label.",
+	 name = L["Label Width"],
+	 desc = L["The width of the label."],
 	 min = 0, max = 500, step = 1, 
 	 order = 2, 
 	 width = "full",
@@ -1416,20 +1416,20 @@ mod.options = {
       },
       justifyV = {
 	 type = "select",
-	 name = "Vertical Justification",
+	 name = L["Vertical Justification"],
 	 values = {
-	    TOP = "Top",
-	    CENTER = "Middle",
-	    BOTTOM = "Bottom"
+	    TOP = L["Top"],
+	    CENTER = L["Middle"],
+	    BOTTOM = L["Bottom"]
 	 }
       }, 
       justifyH = {
 	 type = "select",
-	 name = "Horizontal Justification",
+	 name = L["Horizontal Justification"],
 	 values = {
-	    LEFT = "Left",
-	    CENTER = "Center",
-	    RIGHT = "Right"
+	    LEFT = L["Left"],
+	    CENTER = L["Center"],
+	    RIGHT = L["Right"]
 	 }
       }
    }
@@ -1498,8 +1498,8 @@ end
 function mod:SetupOptions()
    local testbars = {
       type = "toggle",
-      name = "Enable Test Bars",
-      desc = "Enable display of test bars. This allows you to configure the looks without actively targeting something. Note that when test bars are enabled, normal bars are not shown.", 
+      name =  L["Enable Test Bars"],
+      desc =  L["Enable display of test bars. This allows you to configure the looks without actively targeting something. Note that when test bars are enabled, normal bars are not shown."], 
       width = "full",
       order = 0,
       set = function() mod:ToggleTestBars() end, 
@@ -1518,21 +1518,21 @@ function mod:SetupOptions()
    mod:BuildLabelOptions()
    
    mod.main = mod:OptReg("Magic Targets", mod.options.general)
-   mod:OptReg(": bar sizing", mod.options.sizing, "Bar Sizing")
-   mod:OptReg(": bar colors", mod.options.colors, "Bar Colors")
-   mod:OptReg(": bar labels", mod.options.labels, "Bar Labels")
-   mod:OptReg(": frame backdrop", mod.options.backgroundFrame, "Background Frame")
-   mod:OptReg(": Font & Texture", mod.options.looks, "Font & Texture")
-   mod.text = mod:OptReg(": Profiles", mod.options.profile, "Profiles")
+   mod:OptReg(": bar sizing", mod.options.sizing, L["Bar Sizing"])
+   mod:OptReg(": bar colors", mod.options.colors, L["Bar Colors"])
+   mod:OptReg(": bar labels", mod.options.labels, L["Bar Labels"])
+   mod:OptReg(": frame backdrop", mod.options.backgroundFrame, L["Background Frame"])
+   mod:OptReg(": Font & Texture", mod.options.looks, L["Font & Texture"])
+   mod.text = mod:OptReg(": Profiles", mod.options.profile, L["Profiles"])
    
 
    mod:OptReg("Magic Targets CmdLine", {
-		 name = "Command Line",
+		 name = L["Command Line"],
 		 type = "group",
 		 args = {
 		    config = {
 		       type = "execute",
-		       name = "Show configuration dialog",
+		       name = L["Show configuration dialog"],
 		       func = function() mod:ToggleConfigDialog() end,
 		       dialogHidden = true
 		    },
@@ -1646,7 +1646,7 @@ function mod:CreateFrame()
 
    handle.label = handle:CreateFontString(nil, "OVERLAY", "ChatFontNormal")
    handle.label:SetAllPoints()
-   handle.label:SetText("Raid Targets")
+   handle.label:SetText(L["Raid Targets"])
    handle:SetBackdrop( {
 			 bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
 			 edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -1752,7 +1752,7 @@ do
       else
 	 anchor = frame.labels[anchor]
 	 if not anchor then
-	    mod:Print("Invalid anchor frame for label", id, ". Check the settings.")
+	    mod:Print(L["Invalid anchor frame for label"], id, L[". Check the settings."])
 	    anchor = frame.bar
 	 end
 	 return anchor
@@ -1924,7 +1924,7 @@ end
 
 do
    local testNames = {
-      "Elder Black Bear", "Young Brown Bear", "Big Hairy Spider", "Evil Gnoll", "Round Blob of Ooze"
+      L["Elder Black Bear"], L["Young Brown Bear"], L["Big Hairy Spider"], L["Evil Gnoll"], L["Round Blob of Ooze"]
    }
 
    function mod:ToggleTestBars()
