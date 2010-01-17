@@ -18,3 +18,5 @@ externals:
 	Libs/MagicComm: svn://svn.wowace.com/wow/magic-comm/mainline/trunk/MagicComm
 	Libs/LibBars-1.0: svn://svn.wowace.com/wow/libbars-1-0/mainline/trunk/LibBars-1.0
 	Libs/LibMagicUtil-1.0: svn://svn.wowace.com/wow/libmagicutil-10/mainline/trunk/LibMagicUtil-1.0
+	Libs/LibTalentQuery-1.0: svn://svn.wowace.com/wow/libtalentquery-1-0/mainline/trunk
+	Libs/LibGroupTalents-1.0: svn://svn.wowace.com/wow/libgrouptalents-1-0/mainline/trunk

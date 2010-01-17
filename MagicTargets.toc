@@ -7,7 +7,7 @@
 ## X-Category: Raid
 ## X-eMail: neotron@gmail.com
 
-## OptionalDeps: Ace3, MagicComm, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0
+## OptionalDeps: Ace3, MagicComm, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibGroupTalents-1.0
 ## SavedVariables: MagicTargetsDB
 
 # Library files
