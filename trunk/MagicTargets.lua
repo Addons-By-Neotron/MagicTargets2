@@ -25,10 +25,11 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibMagicUtil-1.0", 
 						"AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
 
+LoadAddOn("LibGroupTalents-1.0")
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
 local LDB = LibStub:GetLibrary("LibDataBroker-1.1")
-
+local LGT = LibStub:GetLibrary("LibGroupTalents-1.0")
 local Logger = LibStub("LibLogger-1.0", true)
 if Logger then
    Logger:Embed(MagicTargets)
@@ -179,6 +180,7 @@ local defaults = {
       coloredNames = true,
       target = true,
       eliteonly = false,
+      filterTargetRoles = true, 
       growup = false,
       font = "Friz Quadrata TT",
       locked = false,
@@ -356,6 +358,11 @@ do
 	    end
 	 end
       end
+      -- This checks the new 5-man role as well as the spec of the player
+      if UnitGroupsRolesAssigned(unit) or mod:UnitRole(unit, true) == "tank" then
+	 unitTanks[name] = true
+	 return true
+      end
       local _,class = UnitClass(unit)
       local auras = tankAura[class]
 --      if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
@@ -385,6 +392,13 @@ do
       end
       return false
    end
+end
+
+function mod:UnitRole(unit, specOnly)
+   if not specOnly and mod:IsTank(unit) then
+      return "tank"
+   end
+   return LGT:GetUnitRole(unit)
 end
 
 do
@@ -545,7 +559,14 @@ local function Bar_UpdateTooltip(self, tooltip)
 	    tooltip:AddLine(L["Not targeted by:"], 0.85, 0.85, 0.1);
 	    for id in pairs(ingroup) do
 	       if not tti.targets[id] then
-		  sorted[#sorted+1] = id
+		  if db.filterTargetRoles then
+		     local role = mod:UnitRole(id)
+		     if role ~= "tank" and role ~= "healer" then
+			sorted[#sorted+1] = id
+		     end
+		  else
+		     sorted[#sorted+1] = id
+		  end
 	       end
 	    end
 	 else
@@ -1196,6 +1217,30 @@ mod.options = {
 	    name = L["Show mouseover tooltip"],
 	    desc = L["If enabled a tooltip with information about the targets will be shown when you mouse over the bars. If disabled, MagicTargets bars will only intercept mouse clicks when they are unlocked."], 
 	    set = function(_, val) db.showTooltip = val mod:ToggleLocked(db.locked) end,
+	    order = 100, 
+	 },
+	 coloredNames = {
+	    type = "toggle",
+	    name = L["Use class colors in tooltip."],
+	    width = "full",
+	    disabled = function() return not db.showTooltip end,
+	    order = 200,
+	 },
+	 showNotTargetedBy = {
+	    type = "toggle",
+	    name = L["Show who's not targeting a mob in the tooltip."],
+	    desc = L["When enabled, all party or raid members not targeting the mob will be shown in the tooltip. Otherwise people targeting the mob will be shown."], 
+	    width = "full",
+	    disabled = function() return not db.showTooltip end, 
+	    order = 300,
+	 },
+	 filterTargetRoles = {
+	    type = "toggle",
+	    name = L["Filter tanks and healers from the not targeted by list."],
+	    desc = L["If enabled, tanks and healers will not be shown in the list of players not targeting the mob in the mouseover tooltip. Usually you don't care whether or not they do."], 
+	    width = "full",
+	    disabled = function() return not db.showNotTargetedBy or not db.showTooltip end,
+	    order = 400,
 	 },
 	 showDuration = {
 	    type = "toggle",
@@ -1222,19 +1267,6 @@ mod.options = {
 	    name = L["Lock Magic Targets bar positions."],
 	    width = "full",
 	    set = function(_, val) mod:ToggleLocked() end,
-	 },
-	 coloredNames = {
-	    type = "toggle",
-	    name = L["Use class colors in tooltip."],
-	    width = "full",
-	    hidden = function() return not db.showTooltip end
-	 },
-	 showNotTargetedBy = {
-	    type = "toggle",
-	    name = L["Show who's not targeting a mob in the tooltip."],
-	    desc = L["If enabled, all party or raid members not targeting the player will be shown in the tooltip. Otherwise people targeting the mob will be shown."], 
-	    width = "full",
-	    hidden = function() return not db.showTooltip end
 	 },
 	 growup = {
 	    type = "toggle",

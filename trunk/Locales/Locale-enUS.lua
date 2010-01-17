@@ -32,9 +32,12 @@ L["Show a green triangle indicating your current target."] = true
 L["Lock Magic Targets bar positions."] = true
 L["Use class colors in tooltip."] = true
 L["Show who's not targeting a mob in the tooltip."] = true
-L["If enabled, all party or raid members not targeting the player will be shown in the tooltip. Otherwise people targeting the mob will be shown."] = true 
+L["When enabled, all party or raid members not targeting the mob will be shown in the tooltip. Otherwise people targeting the mob will be shown."] = true
 L["Grow bars upwards."] = true
 L["Growing bars %s."] = true
+L["Filter tanks and healers from the not targeted by list."] = true
+L["If enabled, tanks and healers will not be shown in the list of players not targeting the mob in the mouseover tooltip. Usually you don't care whether or not they do."] = true
+
 L["Filter out all non-elite mobs."] = true
 L["Fade bars as health decreases."] = true
 L["Hide anchor when bars are locked."] = true
