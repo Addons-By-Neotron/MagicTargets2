@@ -359,7 +359,7 @@ do
 	 end
       end
       -- This checks the new 5-man role as well as the spec of the player
-      if UnitGroupsRolesAssigned(unit) or mod:UnitRole(unit, true) == "tank" then
+      if UnitGroupRolesAssigned(unit) or mod:UnitRole(unit, true) == "tank" then
 	 unitTanks[name] = true
 	 return true
       end
