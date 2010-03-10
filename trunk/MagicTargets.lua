@@ -587,7 +587,7 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 tooltip:AddLine(L["Not targeted by anyone."]);
       end
    else
-      if tti.name then
+      if tti and tti.name then
 	 tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)	 
 	 tooltip:AddLine(" ")
       end
