@@ -338,7 +338,7 @@ do
    local tankAura = {
       PALADIN = { [GetSpellInfo(25780)] = true }, 
       WARRIOR = hasShieldEquipped, 
-      DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634)] = true }, 
+      DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634) or GetSpellInfo(5487)] = true },  -- there's no dire bear in cataclysm, this is a simple fix
       DEATHKNIGHT = { [GetSpellInfo(48263)] = true }, -- yay, frost presence is visible!
    }
    
@@ -596,19 +596,18 @@ local function Bar_UpdateTooltip(self, tooltip)
    tooltip:Show()
 end
 
-local function Bar_OnEnter()
+local function Bar_OnEnter(frame)
    if not db.showTooltip  then return end
    local tooltip = GameTooltip
-   local self = this
-   tooltip:SetOwner(self, "ANCHOR_CURSOR")
-   Bar_UpdateTooltip(self, tooltip)
-   this.tooltipShowing = true
+   tooltip:SetOwner(frame, "ANCHOR_CURSOR")
+   Bar_UpdateTooltip(frame, tooltip)
+   frame.tooltipShowing = true
 end
 
-local function Bar_OnLeave()
+local function Bar_OnLeave(frame)
    if not db.showTooltip  then return end
    GameTooltip:Hide()
-   this.tooltipShowing = nil
+   frame.tooltipShowing = nil
 end
 
 function mod:UNIT_HEALTH(event, unit)
