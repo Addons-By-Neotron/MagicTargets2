@@ -1,4 +1,5 @@
 ## Interface: 30300
+## X-Compatible-With: 40000
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Author: NeoTron
