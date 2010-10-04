@@ -1,5 +1,6 @@
 local L = LibStub("AceLocale-3.0"):NewLocale("MagicTargets", "enUS", true)
 
+L["[threat] - unit threat level relative to you."] = true
 L["|cffffff00Left click|r to open the configuration screen.\n"] = true
 L["|cffffff00Right click|r to toggle the Magic Target window lock."] = true
 L["Tank"] = true
