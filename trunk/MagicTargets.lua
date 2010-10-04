@@ -697,7 +697,7 @@ function mod:UpdateBar(target, targetedBy)
       else
 	 updated[guid] = 0
       end
-
+      local _, _, scaledPercent = UnitDetailedThreatSituation("player", target)
       local tn = UnitName(targettarget) 
       tti.name = unitname
       tti.target = tn and db.coloredNames and coloredNames[tn] or tn
@@ -705,6 +705,7 @@ function mod:UpdateBar(target, targetedBy)
       tti.level = UnitLevel(target)
       tti.health = uh
       tti.maxhealth = uhm
+      tti.threat = ceil(scaledPercent or 0)
       tti["%"] = ceil(100*uh / uhm)
       
       seen[guid] = time()+4
@@ -1414,7 +1415,9 @@ mod.options = {
 	       L["[target] - the name of the units target.\n"]..
 	       L["[type] - unit type (beast, elemental etc).\n"]..
 	       L["[cc] - information indicating type and duration of active crowd control methods on the unit.\n"]..
-	       L["[count] - number of players targeting the unit."],
+	       L["[count] - number of players targeting the unit."]..
+	       L["[threat] - unit threat level relative to you."]
+	    ,
 	 },
 	 labelTheme = {
 	    type = "select",
@@ -1928,7 +1931,7 @@ end
 
 do
    local tokens = {
-      "%", "health", "target", "name", "type", "maxhealth", "cc", "count", "level"
+      "%", "health", "target", "name", "type", "maxhealth", "cc", "count", "level", "threat"
    }
    local function tokenize(str, values)
       if strlen(str) > 2 then 
@@ -1983,6 +1986,7 @@ do
 	 end	 
 	 tti.maxhealth = tti.level * 99 + rnd(500)
 	 tti.health = ceil(tti.maxhealth * (10+rnd(90))/100)
+	 tti.threat = ceil(10 + rnd(90))
 	 tti["%"] = ceil(100*tti.health/tti.maxhealth)
 	 tooltipInfo[tostring(id)] = tti
 	 if rnd(5) == 1 then

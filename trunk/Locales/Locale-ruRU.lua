@@ -103,6 +103,7 @@ L["Young Brown Bear"] = "Молодой бурый медведь"
 L["Big Hairy Spider"] = "Большой волосатый паук"
 L["Evil Gnoll"] = "Гнолл-чернолап"
 L["Round Blob of Ooze"] = "Сочащийся слизнюк"
+-- L["[threat] - unit threat level relative to you."] = true
 end
 
 local L = LibStub("AceLocale-3.0"):NewLocale("MagicTargetsTheme", "ruRU")
