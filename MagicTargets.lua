@@ -41,50 +41,50 @@ local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
 local comm = LibStub("MagicComm-1.0")
 
-local GetItemInfo = GetItemInfo
-local GetSpellInfo = GetSpellInfo
+local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
-local UnitClassification = UnitClassification
-local UnitBuff = UnitBuff
-local UnitLevel = UnitLevel
-local UnitHealth = UnitHealth
-local UnitHealthMax = UnitHealthMax
-local UnitCreatureType = UnitCreatureType
-local UnitExists = UnitExists
-local UnitCanAttack = UnitCanAttack
-local UnitIsDead = UnitIsDead
-local UnitPlayerControlled = UnitPlayerControlled
-local UnitIsPlayer = UnitIsPlayer
-local UnitGUID = UnitGUID
-local UnitClass = UnitClass
-local UnitName = UnitName
+local GetItemInfo = GetItemInfo
 local GetNumPartyMembers = GetNumPartyMembers
 local GetNumRaidMembers = GetNumRaidMembers
 local GetRaidRosterInfo = GetRaidRosterInfo
-local InCombatLockdown = InCombatLockdown
 local GetRaidTargetIndex = GetRaidTargetIndex
-local strlen = strlen
-local fmt = string.format
-local rnd = math.random
+local GetSpellInfo = GetSpellInfo
+local InCombatLockdown = InCombatLockdown
+local UIParent = UIParent
+local UnitBuff = UnitBuff
+local UnitCanAttack = UnitCanAttack
+local UnitClass = UnitClass
+local UnitClassification = UnitClassification
+local UnitCreatureType = UnitCreatureType
+local UnitExists = UnitExists
+local UnitGUID = UnitGUID
+local UnitHealth = UnitHealth
+local UnitHealthMax = UnitHealthMax
+local UnitIsDead = UnitIsDead
+local UnitIsPlayer = UnitIsPlayer
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitPlayerControlled = UnitPlayerControlled
 local ceil = math.ceil
-local tinsert = table.insert
-local tconcat = table.concat
-local tremove = table.remove
-local tsort = table.sort
-local time = time
-local type = type
+local fmt = string.format
+local gsub = gsub
 local ipairs = ipairs
 local max = max
-local gsub = gsub
-local CreateFrame = CreateFrame
-local UIParent = UIParent
-local pairs = pairs
 local min = min
-local tostring = tostring
-local tonumber = tonumber
 local next = next
-local sort = sort
+local pairs = pairs
+local rnd = math.random
 local select = select
+local sort = sort
+local strlen = strlen
+local tconcat = table.concat
+local time = time
+local tinsert = table.insert
+local tonumber = tonumber
+local tostring = tostring
+local tremove = table.remove
+local tsort = table.sort
+local type = type
 local unpack = unpack
 
 local addonEnabled = false
@@ -993,7 +993,7 @@ local function GetFlagInfo(flags)
    bit_band(flags, COMBATLOG_OBJECT_REACTION_FRIENDLY) ~= 0 -- is friendly
 end
 
-function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, sguid, sname, sflags,
+function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, hideCaster, sguid, sname, sflags,
 					 tguid, tname, tflags, spellid, spellname)
 --   mod:debug("EVENT: %s\n", event)
    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
