@@ -1615,18 +1615,14 @@ function mod:SortBars()
 	 if db.growup then
 	    if anchor then
 	       frame:SetPoint("BOTTOMLEFT", anchor, "TOPLEFT", 0, db.spacing)
-	       frame:SetPoint("BOTTOMRIGHT", anchor, "TOPRIGHT", 0, db.spacing)
 	    else
 	       frame:SetPoint("BOTTOMLEFT", mod.frame, "BOTTOMLEFT", db.padding, db.padding)
-	       frame:SetPoint("BOTTOMRIGHT", mod.frame, "BOTTOMRIGHT", -db.padding, db.padding)
 	    end
 	 else
 	    if anchor then
 	       frame:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -db.spacing)
-	       frame:SetPoint("TOPRIGHT", anchor, "BOTTOMRIGHT", 0, -db.spacing)
 	    else
 	       frame:SetPoint("TOPLEFT", mod.frame, "TOPLEFT", db.padding, -db.padding)
-	       frame:SetPoint("TOPRIGHT", mod.frame, "TOPRIGHT", -db.padding, -db.padding)
 	    end
 	 end
 	 anchor = frame
@@ -1638,6 +1634,7 @@ function mod:SortBars()
       local p2 = db.padding*2
       w = w+p2
       db.lastWidth = w
+     
       mod.frame:SetWidth(w)
       mod.frame:SetHeight(h+p2)
       if not mod.frame:IsShown() then
@@ -1847,12 +1844,7 @@ do
    end
    
    local function ResizeBar(frame, lbs)
-      frame:SetHeight(lbs.height(frame))
-      frame:SetWidth(lbs.width(frame))
-      frame.bar:SetLength(db.width)
-      frame.bar:SetThickness(db.height)
-      frame.icon:SetHeight(db.height)
-      frame.icon:SetWidth(db.height)
+      frame:ClearAllPoints()
       for id = 1, #lbs.labels do
 	 local label = frame.labels[id]
 	 local lw = lbs.labels[id].width
@@ -1861,6 +1853,12 @@ do
 	    label:SetWidth(lw)
 	 end
       end
+      frame:SetHeight(lbs.height(frame))
+      frame:SetWidth(lbs.width(frame))
+      frame.bar:SetLength(db.width)
+      frame.bar:SetThickness(db.height)
+      frame.icon:SetHeight(db.height)
+      frame.icon:SetWidth(db.height)
    end
    
    function mod:OnDragStart()
