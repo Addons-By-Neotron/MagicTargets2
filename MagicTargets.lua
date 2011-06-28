@@ -993,9 +993,18 @@ local function GetFlagInfo(flags)
    bit_band(flags, COMBATLOG_OBJECT_REACTION_FRIENDLY) ~= 0 -- is friendly
 end
 
-function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, hideCaster, sguid, sname, sflags,
-					 tguid, tname, tflags, spellid, spellname)
+function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, hideCaster, sguid, sname, sflags, srflags,
+					 tguid, tname, tflags, drflags, spellid, spellname)
 --   mod:debug("EVENT: %s\n", event)
+   if type(srflags) == "string" then
+      -- 4.1 compatibility
+      spellname = drflags
+      spellid = tflags
+      tflags = tname
+      tname = tguid
+      tguid = srflags
+   end
+
    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
    local tinGroup, tisPlayer, tisFriend = GetFlagInfo(tflags)
 
