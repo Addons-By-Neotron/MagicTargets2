@@ -1,0 +1,19 @@
+## Interface: 40300
+## X-Compatible-With: 40300
+## Title: Magic Targets 2
+## Notes: PvE Status Frames
+## Author: NeoTron
+## Version: 2.0.@project-revision@
+## DefaultState: enabled
+## X-Category: Raid
+## X-eMail: neotron@gmail.com
+
+## OptionalDeps: Ace3, MagicComm, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0, LibGroupTalents-1.0
+## SavedVariables: MagicTargetsDB
+
+# Library files
+embeds.xml
+Locales.xml
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+MagicTargets.lua
+LabelThemes.lua
