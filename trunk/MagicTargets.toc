@@ -1,5 +1,5 @@
-## Interface: 40200
-## X-Compatible-With: 40200
+## Interface: 40300
+## X-Compatible-With: 40300
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Author: NeoTron
