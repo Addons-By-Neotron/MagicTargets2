@@ -547,7 +547,7 @@ local function Bar_UpdateTooltip(self, tooltip)
 	 tooltip:AddDoubleLine(L["Status:"], L["Idle"], nil, nil, nil, c[1], c[2], c[3])
       end
       if mmtargets[self.guid] then
-	 tooltip:AddDoubleLine(L["MagicMarker Assigment:"], mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
+	 tooltip:AddDoubleLine(L["MagicMarker Assignment:"], mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
       end
       if tti.cc then
 	 tooltip:AddDoubleLine(L["Crowd Control:"], tti.cc, nil, nil, nil, 1, 1, 1)
