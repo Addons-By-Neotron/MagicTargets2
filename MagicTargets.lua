@@ -29,7 +29,7 @@ LoadAddOn("LibGroupTalents-1.0")
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
 local LDB = LibStub:GetLibrary("LibDataBroker-1.1")
-local LGT = LibStub:GetLibrary("LibGroupTalents-1.0")
+local LGT = LibStub:GetLibrary("LibGroupTalents-1.0", true)
 local Logger = LibStub("LibLogger-1.0", true)
 if Logger then
    Logger:Embed(MagicTargets)
@@ -44,8 +44,8 @@ local comm = LibStub("MagicComm-1.0")
 local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetItemInfo = GetItemInfo
-local GetNumPartyMembers = GetNumPartyMembers
-local GetNumRaidMembers = GetNumRaidMembers
+local GetNumGroupMembers = GetNumGroupMembers
+local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
 local GetRaidTargetIndex = GetRaidTargetIndex
 local GetSpellInfo = GetSpellInfo
@@ -359,7 +359,7 @@ do
 	 end
       end
       -- This checks the new 5-man role as well as the spec of the player
-      if UnitGroupRolesAssigned(unit) or mod:UnitRole(unit, true) == "tank" then
+      if UnitGroupRolesAssigned(unit) == "TANK" or mod:UnitRole(unit, true) == "tank" then
 	 unitTanks[name] = true
 	 return true
       end
@@ -398,7 +398,18 @@ function mod:UnitRole(unit, specOnly)
    if not specOnly and mod:IsTank(unit) then
       return "tank"
    end
-   return LGT:GetUnitRole(unit)
+   local role = UnitGroupRolesAssigned(unit)
+   if role == "TANK" then
+      return "tank"
+   elseif role == "HEALER" then
+      return "healer"
+   else
+      if LGT then 
+	 return LGT:GetUnitRole(unit)
+      else
+	 return "dps"
+      end
+   end
 end
 
 do
@@ -414,7 +425,7 @@ do
 
    function mod:ScanGroupMembers()
       mod.clear(ingroup)
-      if GetNumPartyMembers() > 0 or GetNumRaidMembers() > 0 then
+      if GetNumGroupMembers() > 0 then
 	 isInGroup = true
       else
 	 mod.clear(coloredNames)
@@ -845,12 +856,12 @@ do
    local raidtarget, partytarget
    function mod:IterateRaid(callback, target, ...)
       local id, name, class, map
-      if GetNumRaidMembers() > 0 then
+      if IsInRaid() then
 	 if target then 
 	    if not raidtarget then raidtarget = mod.get() end
 	    map = raidtarget
 	 end
-	 for id = 1,GetNumRaidMembers() do
+	 for id = 1,GetNumGroupMembers() do
 	    local name = GetRaidRosterInfo(id)
 	    if target then 
 	       if not map[id] then map[id] = "raid"..id..(target and "target" or "") end
@@ -860,10 +871,10 @@ do
 	    end
 	 end
       else
-	 if GetNumPartyMembers() > 0 then
+	 if GetNumGroupMembers() > 0 then
 	    if not partytarget then partytarget = mod.get() end
 	    map = partytarget
-	    for id = 1,GetNumPartyMembers() do
+	    for id = 1,GetNumGroupMembers() do
 	       if not map[id] then map[id] = "party"..id end
 	       local name = UnitName(map[id])
 	       callback(self, (target and (map[id].."target")) or name, name, ...)
