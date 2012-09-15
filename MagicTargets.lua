@@ -25,7 +25,7 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibMagicUtil-1.0", 
 						"AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
 
-LoadAddOn("LibGroupTalents-1.0")
+--LoadAddOn("LibGroupTalents-1.0")
 -- Silently fail embedding if it doesn't exist
 local LibStub = LibStub
 local LDB = LibStub:GetLibrary("LibDataBroker-1.1")
