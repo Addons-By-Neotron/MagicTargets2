@@ -275,8 +275,7 @@ function mod:OnEnable()
    if self.SetLogLevel then
       self:SetLogLevel(self.logLevels.TRACE)
    end
-   self:RegisterEvent("RAID_ROSTER_UPDATE", "ScheduleGroupScan")
-   self:RegisterEvent("PARTY_MEMBERS_CHANGED", "ScheduleGroupScan")
+   self:RegisterEvent("GROUP_ROSTER_UPDATE", "ScheduleGroupScan")
    self:ScheduleGroupScan(true)
 end
 
@@ -320,8 +319,7 @@ function mod:SetFont()
 end
 
 function mod:OnDisable()
-   self:UnregisterEvent("RAID_ROSTER_UPDATE")
-   self:UnregisterEvent("PARTY_MEMBERS_CHANGED")
+   self:UnregisterEvent("GROUP_ROSTER_UPDATE")
 end
 
 local unitTanks = {}
@@ -639,12 +637,11 @@ function mod:UNIT_HEALTH(event, unit)
    end
 end
 
-
 function mod:UpdateBar(target, targetedBy)
    if not UnitExists(target) or mod.testbars then return end
    if target == "mouseover" then targetedBy = nil end
-   local guid = UnitGUID(target)
 
+   local guid = UnitGUID(target)
    -- Add to the people targeting this particular unit
    if updated[guid] then
       if targetedBy then
@@ -661,9 +658,8 @@ function mod:UpdateBar(target, targetedBy)
 
    local type = UnitCreatureType(target)
    local unitname = UnitName(target)
-   if UnitCanAttack("player", target) and not UnitIsDead(target)
-      and not ingroup[unitname] and not UnitPlayerControlled(target) then
-	 -- and not UnitIsPlayer(target) then
+   if UnitCanAttack("player", target) and not UnitIsDead(target) and not ingroup[unitname] and not UnitPlayerControlled(target) then
+      -- and not UnitIsPlayer(target) then
       if type == L["Critter"] or type == L["Totem"]  or (db.eliteonly and UnitClassification(target) == "normal") then
 	 trivial[guid] = true
 	 self:RemoveBar(guid)
@@ -857,6 +853,8 @@ do
    function mod:IterateRaid(callback, target, ...)
       local id, name, class, map
       if IsInRaid() then
+--         if mod.debug then mod:debug("Scanning raid ") end
+         
 	 if target then 
 	    if not raidtarget then raidtarget = mod.get() end
 	    map = raidtarget
@@ -865,6 +863,9 @@ do
 	    local name = GetRaidRosterInfo(id)
 	    if target then 
 	       if not map[id] then map[id] = "raid"..id..(target and "target" or "") end
+               
+--               if mod.debug then mod:debug("Raid id %d is %s or %s", id, name, map[id]) end
+
 	       callback(self, map[id], name,...)
 	    else
 	       callback(self, name, name, ...)
