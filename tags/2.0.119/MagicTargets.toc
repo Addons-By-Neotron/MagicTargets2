@@ -1,0 +1,21 @@
+## Interface: 50400
+## X-Compatible-With: 50400
+## Title: Magic Targets 2
+## Notes: PvE Status Frames
+## Notes-zhCN: PvE 状态框体
+## Author: NeoTron
+## Version: 2.0.@project-revision@
+## DefaultState: enabled
+## X-Category: Raid
+## X-eMail: neotron@gmail.com
+
+## OptionalDeps: Ace3, MagicComm, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibMagicUtil-1.0
+## DISABLED-OptionalDeps: LibGroupTalents-1.0
+## SavedVariables: MagicTargetsDB
+
+# Library files
+embeds.xml
+Locales.xml
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+MagicTargets.lua
+LabelThemes.lua
