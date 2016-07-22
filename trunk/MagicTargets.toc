@@ -1,5 +1,5 @@
-## Interface: 60000
-## X-Compatible-With: 60000
+## Interface: 70000
+## X-Compatible-With: 70000
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Notes-zhCN: PvE 状态框体
