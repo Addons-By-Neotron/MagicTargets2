@@ -1,12 +1,11 @@
 package-as: MagicTargets
 
 externals:
-	Libs/LibStub: https://repos.wowace.com/wow/libstub/mainline/tags/1.0
-	Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/mainline/trunk/AceGUI-3.0-SharedMediaWidgets
+	Libs/LibStub: https://repos.wowace.com/wow/libstub/trunk
 	Libs/AceAddon-3.0: https://repos.wowace.com/wow/ace3/trunk/AceAddon-3.0
 	Libs/AceDB-3.0: https://repos.wowace.com/wow/ace3/trunk/AceDB-3.0
-	Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/mainline/trunk/AceGUI-3.0-SharedMediaWidgets
-	Libs/LibSharedMedia-3.0: https://repos.wowace.com/wow/libsharedmedia-3-0/mainline/trunk/LibSharedMedia-3.0
+	Libs/AceGUI-3.0-SharedMediaWidgets: https://repos.wowace.com/wow/ace-gui-3-0-shared-media-widgets/trunk/AceGUI-3.0-SharedMediaWidgets
+	Libs/LibSharedMedia-3.0: https://repos.wowace.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
 	Libs/AceComm-3.0: https://repos.wowace.com/wow/ace3/trunk/AceComm-3.0
 	Libs/AceDBOptions-3.0: https://repos.wowace.com/wow/ace3/trunk/AceDBOptions-3.0
 	Libs/CallbackHandler-1.0: https://repos.wowace.com/wow/ace3/trunk/CallbackHandler-1.0
@@ -17,8 +16,9 @@ externals:
 	Libs/AceEvent-3.0: https://repos.wowace.com/wow/ace3/trunk/AceEvent-3.0
 	Libs/AceTimer-3.0: https://repos.wowace.com/wow/ace3/trunk/AceTimer-3.0
 	Libs/MagicComm: https://github.com/neotron/WoW-MagicComm.git
-	Libs/LibMagicUtil-1.0: https:https://github.com/neotron/WoW-libMagicUtil.git
-	Libs/LibTalentQuery-1.0: https://repos.wowace.com/wow/libtalentquery-1-0/mainline/trunk
+	Libs/LibMagicUtil-1.0: https://github.com/neotron/WoW-libMagicUtil.git
+	Libs/LibLogger: https://github.com/neotron/WoW-LibLogger.git
+	Libs/LibTalentQuery-1.0: https://repos.wowace.com/wow/libtalentquery-1-0/trunk
 
 # Disabled for now, doesn't work
 #	Libs/LibGroupTalents-1.0: https://repos.wowace.com/wow/libgrouptalents-1-0/mainline/trunk

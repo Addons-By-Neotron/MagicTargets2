@@ -999,15 +999,15 @@ COMBATLOG_OBJECT_TYPE_PLAYER
 
 
 local function GetFlagInfo(flags)
-   return
+   return 
    bit_band(flags, COMBATLOG_OBJECT_AFFILIATION_MINE+COMBATLOG_OBJECT_AFFILIATION_PARTY+COMBATLOG_OBJECT_AFFILIATION_RAID)~=0, -- in group
    bit_band(flags, COMBATLOG_OBJECT_TYPE_PLAYER)==COMBATLOG_OBJECT_TYPE_PLAYER, -- is player
    bit_band(flags, COMBATLOG_OBJECT_REACTION_FRIENDLY) ~= 0 -- is friendly
 end
 
-function mod:COMBAT_LOG_EVENT_UNFILTERED(_, tt, event, hideCaster, sguid, sname, sflags, srflags,
-					 tguid, tname, tflags, drflags, spellid, spellname)
---   mod:debug("EVENT: %s\n", event)
+function mod:COMBAT_LOG_EVENT_UNFILTERED()
+   local tt, event, hideCaster, sguid, sname, sflags, srflags, tguid, tname, tflags, drflags, spellid, spellname = CombatLogGetCurrentEventInfo()
+--   mod:debug("EVENT: %s, sflags: %d, tflags: %d", event, sflags, tflags)
    if type(srflags) == "string" then
       -- 4.1 compatibility
       spellname = drflags
