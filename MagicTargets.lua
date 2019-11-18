@@ -882,7 +882,7 @@ do
 	 if GetNumGroupMembers() > 0 then
 	    if not partytarget then partytarget = mod.get() end
 	    map = partytarget
-	    for id = 1,GetNumGroupMembers() do
+	    for id = 1,GetNumGroupMembers() - 1 do
 	       if not map[id] then map[id] = "party"..id end
 	       local name = UnitName(map[id])
 	       callback(self, (target and (map[id].."target")) or name, name, ...)
