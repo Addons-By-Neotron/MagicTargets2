@@ -86,7 +86,7 @@ local tremove = table.remove
 local tsort = table.sort
 local type = type
 local unpack = unpack
-
+local isClassic = UnitCharacterPoints ~= nil
 local addonEnabled = false
 local ccspells = {}
 local db, isInGroup, inCombat
@@ -337,9 +337,10 @@ do
       PALADIN = { [GetSpellInfo(25780)] = true }, 
       WARRIOR = hasShieldEquipped, 
       DRUID   = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634) or GetSpellInfo(5487)] = true },  -- there's no dire bear in cataclysm, this is a simple fix
-      DEATHKNIGHT = { [GetSpellInfo(48263)] = true }, -- yay, frost presence is visible!
    }
-   
+   if GetSpellInfo(48263) ~=  nil then 
+      tankAura[DEATHKNIGHT] = { [GetSpellInfo(48263)] = true } -- yay, frost presence is visible!
+   end
    
    local UnitBuff = UnitBuff
    function mod:IsTank(unit)
@@ -436,7 +437,9 @@ do
 	    addonEnabled = true
 	    self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	    self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget", "target")
-	    self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
+	    if not isClassic then
+	       self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
+	    end
 	    self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
 	    self:RegisterEvent("UNIT_HEALTH")
 	    self:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -457,7 +460,9 @@ do
 	    self:UnregisterEvent("PLAYER_REGEN_DISABLED")
 	    self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
 	    self:UnregisterEvent("PLAYER_TARGET_CHANGED")
-	    self:UnregisterEvent("PLAYER_FOCUS_CHANGED")
+	    if not isClassic then
+	       self:UnregisterEvent("PLAYER_FOCUS_CHANGED")
+	    end
 	    self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
 	    comm:UnregisterListener(self, "MM")
 	    self:PLAYER_REGEN_ENABLED()
@@ -825,7 +830,9 @@ function mod:UpdateBars()
       mod.clear(seen)
    end
    self:UpdateTarget("target", true)
-   self:UpdateTarget("focus", true)
+   if not isClassic then
+      self:UpdateTarget("focus", true)
+   end
    mod:SortBars()
 end
 
@@ -1489,6 +1496,10 @@ mod.options = {
       }
    }
 }
+
+if not isClassic then
+   mod.options.general.args.focus = nil
+end
 
 function mod:OptReg(optname, tbl, dispname, cmd)
    if dispname then
