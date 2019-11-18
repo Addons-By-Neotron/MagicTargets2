@@ -709,7 +709,12 @@ function mod:UpdateBar(target, targetedBy)
       else
 	 updated[guid] = 0
       end
-      local _, _, scaledPercent = UnitDetailedThreatSituation("player", target)
+      if isClassic then
+	 tti.threat = 0 -- TODO - use threat meter?
+      else
+	 local _, _, scaledPercent = UnitDetailedThreatSituation("Player", target)
+	 tti.threat = ceil(scaledPercent or 0)
+      end
       local tn = UnitName(targettarget) 
       tti.name = unitname
       tti.target = tn and db.coloredNames and coloredNames[tn] or tn
@@ -717,7 +722,6 @@ function mod:UpdateBar(target, targetedBy)
       tti.level = UnitLevel(target)
       tti.health = uh
       tti.maxhealth = uhm
-      tti.threat = ceil(scaledPercent or 0)
       tti["%"] = ceil(100*uh / uhm)
       
       seen[guid] = time()+4
@@ -1497,7 +1501,7 @@ mod.options = {
    }
 }
 
-if not isClassic then
+if isClassic then
    mod.options.general.args.focus = nil
 end
 
