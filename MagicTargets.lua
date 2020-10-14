@@ -1697,11 +1697,11 @@ function mod:SetHandlePoints()
 end
 
 function mod:CreateFrame()
-   mod.frame = CreateFrame("Frame", nil, UIParent)
+   mod.frame = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
    mod.frame:SetMovable(true)
    mod.frame:SetWidth(db.lastWidth or 220)
    mod.frame:SetHeight(10)
-   local handle = CreateFrame("Frame", nil, UIParent)
+   local handle = CreateFrame("Frame", nil, UIParent, BackdropTemplateMixin and "BackdropTemplate")
    mod.handle = handle
    
    handle:RegisterForDrag("LeftButton")
