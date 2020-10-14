@@ -358,7 +358,7 @@ do
         DRUID = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634) or GetSpellInfo(5487)] = true }, -- there's no dire bear in cataclysm, this is a simple fix
     }
     if GetSpellInfo(48263) ~= nil then
-        tankAura[DEATHKNIGHT] = { [GetSpellInfo(48263)] = true } -- yay, frost presence is visible!
+        tankAura["DEATHKNIGHT"] = { [GetSpellInfo(48263)] = true } -- yay, frost presence is visible!
     end
 
     local UnitBuff = UnitBuff
