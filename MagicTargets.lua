@@ -1850,7 +1850,7 @@ function mod:CreateFrame()
     targetIcon:SetTexture([[Interface\Addons\MagicTargets\Textures\triangle.tga]])
     targetIcon:SetHeight(ih)
     targetIcon:SetWidth(ih)
-    targetIcon:SetVertexColor(0, 1, 0.4, 1)
+    targetIcon:SetVertexColor(0.3, 1, 0.6 ,1)
     targetIcon:Hide()
 end
 
