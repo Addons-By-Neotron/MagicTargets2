@@ -50,4 +50,4 @@ jobs:
       - name: Package and release for BCC
         uses: BigWigsMods/packager@v1
         with:
-          args: -g bcc 
+          args: -g bcc
