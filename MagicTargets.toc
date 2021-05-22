@@ -1,4 +1,9 @@
-## Interface: 90001
+## Interface: 90005
+## Interface-Classic: 11306
+## Interface-BCC: 20501
+## Interface-Retail: 90005
+## X-Curse-Project-ID: 14365
+## X-WoWI-ID: 9098
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Notes-zhCN: PvE 状态框体

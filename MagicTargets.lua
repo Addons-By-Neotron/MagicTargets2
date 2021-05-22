@@ -104,6 +104,13 @@ local focusIcon, targetIcon
 local tableStore = {}
 
 local classColors = {}
+
+
+
+if UnitGroupRolesAssigned == nil then
+    function UnitGroupRolesAssigned() return false end
+end
+
 for k, v in pairs(RAID_CLASS_COLORS) do
     classColors[k] = ("|cff%02x%02x%02x"):format(v.r * 255, v.g * 255, v.b * 255)
 end
@@ -124,8 +131,8 @@ end
 })
 
 local colors = {
-    Tank = { [1] = 0, [2] = 1, [3] = 0.2, [4] = 1 },
-    CC = { [1] = 0, [2] = 0.7, [3] = 0.9, [4] = 1 },
+    Tank   = { [1] = 0, [2] = 1, [3] = 0.2, [4] = 1 },
+    CC     = { [1] = 0, [2] = 0.7, [3] = 0.9, [4] = 1 },
     Notank = { [1] = 1, [2] = 0, [3] = 0, [4] = 1 },
     Normal = { [1] = 1, [2] = 1, [3] = 0.5, [4] = 1 }
 }
