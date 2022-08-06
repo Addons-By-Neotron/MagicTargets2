@@ -1,9 +1,10 @@
 ## Interface: 90205
 ## Interface-Classic: 11403
 ## Interface-BCC: 20504
-## Interface-Retail: 90205
+## Interface-Wrath: 30400
 ## X-Curse-Project-ID: 14365
 ## X-WoWI-ID: 9098
+## X-Wago-ID: pkNMEqNz
 ## Title: Magic Targets 2
 ## Notes: PvE Status Frames
 ## Notes-zhCN: PvE 状态框体
