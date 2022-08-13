@@ -1,4 +1,9 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("MagicTargets", "enUS", true)
+local isSilent = true
+--@debug@
+isSilent = false
+--@end-debug@
+
+local L = LibStub("AceLocale-3.0"):NewLocale("MagicTargets", "enUS", true, isSilent)
 
 L["[threat] - unit threat level relative to you."] = true
 L["|cffffff00Left click|r to open the configuration screen.\n"] = true
