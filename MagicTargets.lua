@@ -1985,6 +1985,7 @@ do
                 label:SetWidth(data.width)
             end
             label:SetJustifyH(data.justifyH)
+            if data.justifyV == "CENTER" then data.justifyV = "MIDDLE" end
             label:SetJustifyV(data.justifyV)
         end
 
