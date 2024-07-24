@@ -1248,8 +1248,8 @@ do
 end
 
 function mod:ToggleConfigDialog()
-    InterfaceOptionsFrame_OpenToCategory(mod.text)
-    InterfaceOptionsFrame_OpenToCategory(mod.main)
+    mod:InterfaceOptionsFrame_OpenToCategory(mod.text)
+    mod:InterfaceOptionsFrame_OpenToCategory(mod.main)
 end
 
 function mod:FixAnchorVisibility()
