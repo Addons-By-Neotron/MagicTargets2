@@ -411,16 +411,12 @@ do
 --            	 mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
             return unitTanks[name]
         else
-            local found = false
-            AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(name, ...)
---                mod:debug("Scanning: Found %s (%s)", name, tostring(auras[name]))
-                if auras[name] then
-                    found = true
+            for aura in pairs(auras) do
+                if AuraUtil.FindAuraByName(aura) then
+                    unitTanks[name] = true
                     return true
                 end
-            end)
-            unitTanks[name] = found
-            return found
+            end
         end
         return false
     end
