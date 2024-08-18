@@ -48,10 +48,18 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
 local GetRaidTargetIndex = GetRaidTargetIndex
-local GetSpellInfo = GetSpellInfo or C_Spell.GetSpellInfo
+local GetSpellInfo = GetSpellInfo or function(id)
+    local spellInfo = C_Spell.GetSpellInfo(id)
+    if spellInfo then
+        -- Returning the values in the same order as the original GetSpellInfo
+        return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
+    else
+        -- If the spell is not found, return nil
+        return nil
+    end
+end
 local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
-local UnitBuff = UnitBuff
 local UnitCanAttack = UnitCanAttack
 local UnitClass = UnitClass
 local UnitClassification = UnitClassification
@@ -368,7 +376,6 @@ do
         tankAura["DEATHKNIGHT"] = { [GetSpellInfo(48263)] = true } -- yay, frost presence is visible!
     end
 
-    local UnitBuff = UnitBuff
     function mod:IsTank(unit)
         local name = UnitName(unit)
         if unitTanks[name] ~= nil then
@@ -390,32 +397,30 @@ do
         end
         local _, class = UnitClass(unit)
         local auras = tankAura[class]
-        --      if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
-        --				  class, tostring(auras), type(auras))
-        --      end
+--              if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
+--        				  class, mod:Dump(auras), type(auras))
+--              end
         if not auras then
-            --	 mod:debug("Found no auras for class %s", class)
+--            	 mod:debug("Found no auras for class %s", class)
             unitTanks[name] = false
             return false
         end
 
         if type(auras) == "function" then
             unitTanks[name] = auras(unit)
-            --	 mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
+--            	 mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
             return unitTanks[name]
         else
-            for i = 1, 40 do
-                local buff = UnitBuff(unit, i)
-                if not buff then
-                    break
-                end
-                --	 mod:debug("Scanning: Found %s (%s)", buff, tostring(auras[buff]))
-                if auras[buff] then
-                    unitTanks[name] = true
+            local found = false
+            AuraUtil.ForEachAura(unit, "HELPFUL", nil, function(name, ...)
+--                mod:debug("Scanning: Found %s (%s)", name, tostring(auras[name]))
+                if auras[name] then
+                    found = true
                     return true
                 end
-            end
-            unitTanks[name] = false
+            end)
+            unitTanks[name] = found
+            return found
         end
         return false
     end
