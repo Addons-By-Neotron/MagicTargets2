@@ -412,7 +412,7 @@ do
             return unitTanks[name]
         else
             for aura in pairs(auras) do
-                if AuraUtil.FindAuraByName(aura) then
+                if AuraUtil.FindAuraByName(unit, aura) then
                     unitTanks[name] = true
                     return true
                 end
