@@ -48,16 +48,6 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
 local GetRaidTargetIndex = GetRaidTargetIndex
-local GetSpellInfo = GetSpellInfo or function(id)
-    local spellInfo = C_Spell.GetSpellInfo(id)
-    if spellInfo then
-        -- Returning the values in the same order as the original GetSpellInfo
-        return spellInfo.name, nil, spellInfo.iconID, spellInfo.castTime, spellInfo.minRange, spellInfo.maxRange, spellInfo.spellID, spellInfo.originalIconID
-    else
-        -- If the spell is not found, return nil
-        return nil
-    end
-end
 local InCombatLockdown = InCombatLockdown
 local UIParent = UIParent
 local UnitCanAttack = UnitCanAttack
@@ -108,7 +98,7 @@ local raidicons = {}
 local ingroup = {}
 local trivial = {}
 local focusIcon, targetIcon
-
+local GetSpellInfo = function(id) return MagicTargets.GetSpellInfo(id) end
 local tableStore = {}
 
 local classColors = {}
