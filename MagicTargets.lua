@@ -40,7 +40,7 @@ local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
 local comm = LibStub("MagicComm-1.0")
-
+local UnitAura = UnitAura
 local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetItemInfo = GetItemInfo
@@ -397,9 +397,9 @@ do
         end
         local _, class = UnitClass(unit)
         local auras = tankAura[class]
---              if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
---        				  class, mod:Dump(auras), type(auras))
---              end
+--        if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
+--                class, mod:Dump(auras), type(auras))
+--        end
         if not auras then
 --            	 mod:debug("Found no auras for class %s", class)
             unitTanks[name] = false
@@ -408,11 +408,17 @@ do
 
         if type(auras) == "function" then
             unitTanks[name] = auras(unit)
---            	 mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
+            --mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
             return unitTanks[name]
         else
-            for aura in pairs(auras) do
-                if AuraUtil.FindAuraByName(unit, aura) then
+            for idx = 1, 40 do
+                local aura = UnitAura(unit, idx, "HELPFUL")
+                if not aura then
+                    break
+                end
+--                mod:debug("Scanning: Found %s ",  mod:Dump(aura) or "nil")
+
+                if auras[aura] then
                     unitTanks[name] = true
                     return true
                 end
