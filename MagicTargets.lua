@@ -2023,8 +2023,9 @@ do
     end
 
     function mod:OnDragStop()
-        mod:SavePosition()
         mod.frame:StopMovingOrSizing()
+        mod:SavePosition()
+        mod:LoadPosition()
     end
 
     local function SetColor(frame, cc)
