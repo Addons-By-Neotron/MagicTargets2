@@ -18,7 +18,7 @@ externals:
     Libs/MagicComm: https://github.com/neotron/WoW-MagicComm.git
     Libs/LibMagicUtil-1.0: https://github.com/neotron/WoW-libMagicUtil.git
     Libs/LibLogger: https://github.com/neotron/WoW-LibLogger.git
-    Libs/LibTalentQuery-1.0: https://repos.wowace.com/wow/libtalentquery-1-0/trunk
 
 # Disabled for now, doesn't work
+#    Libs/LibTalentQuery-1.0: https://repos.wowace.com/wow/libtalentquery-1-0/trunk
 #    Libs/LibGroupTalents-1.0: https://repos.wowace.com/wow/libgrouptalents-1-0/mainline/trunk

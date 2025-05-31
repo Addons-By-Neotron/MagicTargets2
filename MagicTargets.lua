@@ -40,7 +40,6 @@ local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
 local comm = LibStub("MagicComm-1.0")
-local UnitAura = UnitAura
 local CreateFrame = CreateFrame
 local GetInventoryItemLink = GetInventoryItemLink
 local GetItemInfo = GetItemInfo
@@ -402,7 +401,7 @@ do
             return unitTanks[name]
         else
             for idx = 1, 40 do
-                local aura = UnitAura(unit, idx, "HELPFUL")
+                local aura = mod.UnitAura(unit, idx, "HELPFUL")
                 if not aura then
                     break
                 end
