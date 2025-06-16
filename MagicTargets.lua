@@ -1463,7 +1463,7 @@ mod.options = {
             Normal = {
                 type = "color",
                 name = L["Idle"],
-                desc = L["Color used for inactove targets."],
+                desc = L["Color used for inactive targets."],
                 hasAlpha = true,
             },
             CC = {
