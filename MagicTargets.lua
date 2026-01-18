@@ -90,7 +90,11 @@ local tableStore = {}
 
 local classColors = {}
 
+local ScaleTo100 = CurveConstants and CurveConstants.ScaleTo100 or true
 
+local UnitHealthPercent = UnitHealthPercent or function(target)
+    return 100.0 * UnitHealth(target) / UnitHealthMax(target)
+end
 
 if UnitGroupRolesAssigned == nil then
     function UnitGroupRolesAssigned() return false end
@@ -595,7 +599,7 @@ function mod:UNIT_HEALTH(event, unit)
     if tti then
         tti.health = uh
         tti.maxhealth = uhm
-        tti["%"] = fmt("%.0f", UnitHealthPercent(unit, false, CurveConstants.ScaleTo100))
+        tti["%"] = fmt("%.0f", UnitHealthPercent(unit, false, ScaleTo100))
     end
 
     frame.bar:SetValue(uh, uhm)
@@ -666,7 +670,6 @@ function mod:UpdateBar(target, targetedBy)
         else
             tti.threat = 0
         end
-        print(target.." threat is ", UnitDetailedThreatSituation("player", target))
 
         local targettarget = target .. "target"
         local tn = UnitName(targettarget)
@@ -683,7 +686,7 @@ function mod:UpdateBar(target, targetedBy)
         tti.level = UnitLevel(target)
         tti.health = uh
         tti.maxhealth = uhm
-        tti["%"] = fmt("%.0f", UnitHealthPercent(target, false, CurveConstants.ScaleTo100))
+        tti["%"] = fmt("%.0f", UnitHealthPercent(target, false, ScaleTo100))
 
         seen[target] = time() + 4
         if target == "mouseover" then
