@@ -1063,11 +1063,11 @@ mod.options = {
                 name = L["Filter out all non-elite mobs."],
                 width = "full",
             },
-            fadebars = {
+--[[            fadebars = {
                 type = "toggle",
                 name = L["Fade bars as health decreases."],
                 width = "full",
-            },
+            },]]
             hideanchor = {
                 type = "toggle",
                 name = L["Hide anchor when bars are locked."],
