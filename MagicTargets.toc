@@ -1,12 +1,8 @@
-## Interface: 110105
-## Interface-Classic: 11403
-## Interface-BCC: 20504
-## Interface-Cata: 40402
-## Interface-Mists: 50500
+## Interface: 110105, 120000, 120001
 ## X-Curse-Project-ID: 14365
 ## X-WoWI-ID: 9098
 ## X-Wago-ID: pkNMEqNz
-## Title: Magic Targets 2
+## Title: Magic Targets 3
 ## Notes: PvE Status Frames
 ## Notes-zhCN: PvE 状态框体
 ## Author: NeoTron

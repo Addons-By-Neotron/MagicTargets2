@@ -23,7 +23,7 @@ along with MagicTargets.  If not, see <http://www.gnu.org/licenses/>.
 -- 10:50 <@vhaarr> NeoTron: or even AceLibrary("AceEvent-2.0"):RegisterEvent("oRA_MainTankUpdate", function() ... end)
 
 MagicTargets = LibStub("AceAddon-3.0"):NewAddon("MagicTargets", "AceEvent-3.0", "LibMagicUtil-1.0",
-        "AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-1.0")
+        "AceTimer-3.0", "AceConsole-3.0", "LibSimpleBar-2.0")
 
 --LoadAddOn("LibGroupTalents-1.0")
 -- Silently fail embedding if it doesn't exist
@@ -35,14 +35,10 @@ if Logger then
     Logger:Embed(MagicTargets)
 end
 local L = LibStub("AceLocale-3.0"):GetLocale("MagicTargets")
-local C = LibStub("AceConfigDialog-3.0")
 local DBOpt = LibStub("AceDBOptions-3.0")
 local media = LibStub("LibSharedMedia-3.0")
 local mod = MagicTargets
-local comm = LibStub("MagicComm-1.0")
 local CreateFrame = CreateFrame
-local GetInventoryItemLink = GetInventoryItemLink
-local GetItemInfo = GetItemInfo
 local GetNumGroupMembers = GetNumGroupMembers
 local IsInRaid = IsInRaid
 local GetRaidRosterInfo = GetRaidRosterInfo
@@ -54,7 +50,7 @@ local UnitClass = UnitClass
 local UnitClassification = UnitClassification
 local UnitCreatureType = UnitCreatureType
 local UnitExists = UnitExists
-local UnitGUID = UnitGUID
+local UnitIsUnit = UnitIsUnit
 local UnitHealth = UnitHealth
 local UnitHealthMax = UnitHealthMax
 local UnitIsDead = UnitIsDead
@@ -64,14 +60,12 @@ local UnitName = UnitName
 local UnitPlayerControlled = UnitPlayerControlled
 local ceil = math.ceil
 local fmt = string.format
-local gsub = gsub
 local ipairs = ipairs
 local max = max
 local min = min
 local next = next
 local pairs = pairs
 local rnd = math.random
-local select = select
 local sort = sort
 local strlen = strlen
 local tconcat = table.concat
@@ -83,21 +77,15 @@ local tremove = table.remove
 local tsort = table.sort
 local type = type
 local unpack = unpack
-local isClassic = UnitCharacterPoints ~= nil
 local addonEnabled = false
-local ccspells = {}
 local db, isInGroup, inCombat
-local ccstrings = {}
-local mobspells = {}
 local tooltipInfo = {}
 local died = {}
 local seen = {}
-local mmtargets = {}
 local raidicons = {}
 local ingroup = {}
 local trivial = {}
 local focusIcon, targetIcon
-local GetSpellInfo = function(id) return MagicTargets.GetSpellInfo(id) end
 local tableStore = {}
 
 local classColors = {}
@@ -187,16 +175,13 @@ local iconPath = [[Interface\AddOns\MagicTargets\Textures\%d.tga]]
 local defaults = {
     profile = {
         showNotTargetedBy = false,
-        showDuration = true,
         focus = true,
         coloredNames = true,
         target = true,
         eliteonly = false,
-        filterTargetRoles = true,
         growup = false,
         font = "Friz Quadrata TT",
         locked = false,
-        mmlisten = true,
         hideanchor = true,
         outsidegroup = true,
         texture = "Minimalist",
@@ -259,38 +244,11 @@ function mod:OnInitialize()
     for i = 1, 8 do
         raidicons[i] = iconPath:format(i)
     end
-    for id, duration in pairs(comm.spellIdToDuration) do
-        local icon = select(3, GetSpellInfo(id))
-        ccspells[id] = { duration, icon }
-    end
 
     mod.recycledFrames = {}
     mod.unitbars = {}
     mod.bars = {}
     mod:CreateFrame()
-end
-
--- Sort first by Magic Marker priority, then by health and lastly by guid.
-local function BarSortFunc(a, b)
-    local amm = mmtargets[a.name]
-    local bmm = mmtargets[b.name]
-    local av = 0
-    local bv = 0
-    if amm then
-        av = 1000 + (amm.val or 0) + (amm.cc == L["Tank"] and 100 or 0)
-    else
-        av = a.value
-    end
-    if bmm then
-        bv = 1000 + (bmm.val or 0) + (bmm.cc == L["Tank"] and 100 or 0)
-    else
-        bv = b.value
-    end
-    if av == bv then
-        return a.name > b.name
-    else
-        return av > bv
-    end
 end
 
 function mod:OnEnable()
@@ -309,12 +267,10 @@ local function GetRaidIcon(id)
 end
 
 function mod:SetIcon(bar, mark)
-    if not mark then
-        bar.icon:SetTexture(nil)
-    elseif bar.mark ~= mark then
-        bar.icon:SetTexture(GetRaidIcon(mark))
-    end
-    bar.mark = mark
+    -- Disabled: mark is a secret value in Midnight, can't do boolean operations with it
+    -- TODO: Re-enable when Blizzard provides a non-secret way to get raid target indices
+    bar.icon:SetTexture(nil)
+    bar.mark = nil
 end
 
 function mod:IterateBars(func, ...)
@@ -345,76 +301,36 @@ function mod:OnDisable()
     self:UnregisterEvent("GROUP_ROSTER_UPDATE")
 end
 
-local unitTanks = {}
-local shieldSubType = select(7, GetItemInfo(40700)) -- badge shield, always available
-local function hasShieldEquipped(unit)
-    local shieldLink = GetInventoryItemLink(unit, 17)
-    if shieldLink then
-        return select(7, GetItemInfo(shieldLink)) == shieldSubType
-    else
-        return false
+-- Check if a unit is assigned as a tank
+function mod:IsTank(unit)
+    -- Check if unit has TANK role assigned
+    if UnitGroupRolesAssigned(unit) == "TANK" then
+        return true
     end
+
+    -- Check if unit is assigned as main tank in raid
+    if GetPartyAssignment("MAINTANK", unit) then
+        return true
+    end
+
+    return false
 end
-do
-    local tankAura = {
-        PALADIN = { [GetSpellInfo(25780)] = true },
-        WARRIOR = hasShieldEquipped,
-        DRUID = { [GetSpellInfo(5487)] = true, [GetSpellInfo(9634) or GetSpellInfo(5487)] = true }, -- there's no dire bear in cataclysm, this is a simple fix
-    }
-    if GetSpellInfo(48263) ~= nil then
-        tankAura["DEATHKNIGHT"] = { [GetSpellInfo(48263)] = true } -- yay, frost presence is visible!
+
+-- Check if a unit is being tanked (its target is a tank or pet)
+function mod:IsTanked(unit)
+    local targetUnit = unit .. "target"
+
+    -- Check if target is a player who is a tank
+    if  mod:IsTank(targetUnit) then
+        return true
     end
 
-    function mod:IsTank(unit)
-        local name = UnitName(unit)
-        if unitTanks[name] ~= nil then
-            return unitTanks[name]
-        end
-        local oRA = oRA
-        if oRA and oRA.maintanktable then
-            for _, tname in pairs(oRA.maintanktable) do
-                if name == tname then
-                    unitTanks[name] = true
-                    return true
-                end
-            end
-        end
-        -- This checks the new 5-man role as well as the spec of the player
-        if UnitGroupRolesAssigned(unit) == "TANK" or mod:UnitRole(unit, true) == "tank" then
-            unitTanks[name] = true
-            return true
-        end
-        local _, class = UnitClass(unit)
-        local auras = tankAura[class]
---        if mod.debug then mod:debug("Tank check: Class = %s,auras = %s, type(auras) = %s",
---                class, mod:Dump(auras), type(auras))
---        end
-        if not auras then
---            	 mod:debug("Found no auras for class %s", class)
-            unitTanks[name] = false
-            return false
-        end
-
-        if type(auras) == "function" then
-            unitTanks[name] = auras(unit)
-            --mod:debug("Found that %s [%s] is %s", name, unit, tostring(auras(unit)))
-            return unitTanks[name]
-        else
-            for idx = 1, 40 do
-                local aura = mod.UnitAura(unit, idx, "HELPFUL")
-                if not aura then
-                    break
-                end
---                mod:debug("Scanning: Found %s ",  mod:Dump(aura) or "nil")
-
-                if auras[aura] then
-                    unitTanks[name] = true
-                    return true
-                end
-            end
-        end
-        return false
+    -- Check if target is a pet (also considered tanked)
+    if UnitPlayerControlled(targetUnit) then
+        return true
     end
+
+    return false
 end
 
 function mod:UnitRole(unit, specOnly)
@@ -436,6 +352,48 @@ function mod:UnitRole(unit, specOnly)
 end
 
 do
+    local raidtarget, partytarget
+
+    -- Iterator function for raid/party members and optionally their targets
+    function mod:IterateRaid(callback, target, ...)
+        local id, name, class, map
+        if IsInRaid() then
+            if target then
+                if not raidtarget then
+                    raidtarget = mod.get()
+                end
+                map = raidtarget
+            end
+            for id = 1, GetNumGroupMembers() do
+                local name = GetRaidRosterInfo(id)
+                if target then
+                    if not map[id] then
+                        map[id] = "raid" .. id .. (target and "target" or "")
+                    end
+                    callback(self, map[id], name, ...)
+                else
+                    callback(self, name, name, ...)
+                end
+            end
+        else
+            if GetNumGroupMembers() > 0 then
+                if not partytarget then
+                    partytarget = mod.get()
+                end
+                map = partytarget
+                for id = 1, GetNumGroupMembers() - 1 do
+                    if not map[id] then
+                        map[id] = "party" .. id
+                    end
+                    local name = UnitName(map[id])
+                    callback(self, (target and (map[id] .. "target")) or name, name, ...)
+                end
+            end
+            local name = UnitName("player")
+            callback(self, target and "target" or name, name, ...);
+        end
+    end
+
     local groupScanTimer
     function mod:ScheduleGroupScan(fast)
         if groupScanTimer then
@@ -452,32 +410,28 @@ do
         mod.clear(ingroup)
         if GetNumGroupMembers() > 0 then
             isInGroup = true
-        else
-            mod.clear(coloredNames)
-            isInGroup = false
-            mod:OnCommResetV2() -- make sure the magic marker bars are gone
-        end
-        if isInGroup or db.outsidegroup then
+            -- Populate ingroup table with unit name -> unit token mapping
             mod:IterateRaid(function(self, unittarget, unitname)
                 if unitname then
                     ingroup[unitname] = unittarget
                 end
             end, true)
+        else
+            mod.clear(coloredNames)
+            isInGroup = false
+        end
+        if isInGroup or db.outsidegroup then
             if not addonEnabled then
                 addonEnabled = true
-                self:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
                 self:RegisterEvent("PLAYER_TARGET_CHANGED", "UpdateTarget", "target")
-                if not isClassic then
-                    self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
-                end
+                self:RegisterEvent("PLAYER_FOCUS_CHANGED", "UpdateTarget", "focus")
                 self:RegisterEvent("UPDATE_MOUSEOVER_UNIT", "UpdateBar", "mouseover")
                 self:RegisterEvent("UNIT_HEALTH")
                 self:RegisterEvent("PLAYER_REGEN_ENABLED")
                 self:RegisterEvent("PLAYER_REGEN_DISABLED")
+                self:RegisterEvent("NAME_PLATE_UNIT_ADDED")
+                self:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
                 self:ClearCombatData()
-                if db.mmlisten then
-                    comm:RegisterListener(self, "MM", true)
-                end
                 if InCombatLockdown() then
                     self:PLAYER_REGEN_DISABLED()
                 else
@@ -490,13 +444,11 @@ do
                 self:UnregisterEvent("UNIT_HEALTH")
                 self:UnregisterEvent("PLAYER_REGEN_ENABLED")
                 self:UnregisterEvent("PLAYER_REGEN_DISABLED")
-                self:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
                 self:UnregisterEvent("PLAYER_TARGET_CHANGED")
-                if not isClassic then
-                    self:UnregisterEvent("PLAYER_FOCUS_CHANGED")
-                end
+                self:UnregisterEvent("PLAYER_FOCUS_CHANGED")
                 self:UnregisterEvent("UPDATE_MOUSEOVER_UNIT")
-                comm:UnregisterListener(self, "MM")
+                self:UnregisterEvent("NAME_PLATE_UNIT_ADDED")
+                self:UnregisterEvent("NAME_PLATE_UNIT_REMOVED")
                 self:PLAYER_REGEN_ENABLED()
             end
             self:ClearCombatData()
@@ -514,10 +466,17 @@ function mod:UpdateTarget(target, norefresh)
         icon:Hide()
     end
 
-    self:UpdateBar(target, UnitName("player"))
-
+    -- Find the nameplate that matches this focus/target instead of creating a separate bar
     if UnitExists(target) then
-        local frame = mod.unitbars[UnitGUID(target)]
+        local frame = nil
+        -- Search through existing bars to find the one that matches
+        for unitToken, bar in pairs(mod.unitbars) do
+            if string.match(unitToken, "^nameplate") and UnitIsUnit(unitToken, target) then
+                frame = bar
+                break
+            end
+        end
+
         if frame then
             self:MoveIconTo(icon, frame, target)
             mod:SetBarStrings(frame)
@@ -531,14 +490,14 @@ end
 local function Noop()
 end
 
-function mod:RemoveBar(id)
-    local frame = mod.unitbars[id] or mod.bars[id]
+function mod:RemoveBar(unitToken)
+    local frame = mod.unitbars[unitToken] or mod.bars[unitToken]
     if frame then
-        mod.unitbars[frame.guid] = nil
+        mod.unitbars[frame.unitToken] = nil
         frame.mark = nil
-        frame.guid = nil
-        seen[id] = nil
-        mod.del(tooltipInfo, id)
+        frame.unitToken = nil
+        seen[unitToken] = nil
+        mod.del(tooltipInfo, unitToken)
         frame:SetScript("OnEnter", nil)
         frame:SetScript("OnLeave", nil)
         frame:EnableMouse(false)
@@ -563,15 +522,13 @@ function mod:RemoveAllBars(removeAll)
         return
     end
     for id in pairs(mod.unitbars) do
-        if removeAll or not mmtargets[id] then
-            mod:RemoveBar(id)
-        end
+        mod:RemoveBar(id)
     end
     mod:SortBars()
 end
 
-local updated = {}
 local tanked = {}
+local crowdControlled = {}
 
 local lvlFmt = L["Level %d %s"]
 local colorToText = {
@@ -582,13 +539,13 @@ local colorToText = {
 
 local function Bar_UpdateTooltip(self, tooltip)
     tooltip:ClearLines()
-    local tti = tooltipInfo[self.guid]
-    if tti and tti.name then
+    local tti = tooltipInfo[self.unitToken]
+    if tti and type(tti.name) ~= "nil" then
         tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
         tooltip:AddLine(fmt(lvlFmt, tti.level, tti.type), 1, 1, 1)
         tooltip:AddLine(" ")
-        tooltip:AddDoubleLine(L["Health:"], fmt("%.0f%%", 100 * self.bar.value / self.bar.maxValue), nil, nil, nil, 1, 1, 1)
-        if tti.target then
+        tooltip:AddDoubleLine(L["Health:"], tti["%"], nil, nil, nil, 1, 1, 1)
+        if type(tti.target) ~= "nil" then
             tooltip:AddDoubleLine(L["Target:"], tti.target, nil, nil, nil, 1, 1, 1)
         end
         if self.color and colorToText[self.color] and InCombatLockdown() then
@@ -598,46 +555,7 @@ local function Bar_UpdateTooltip(self, tooltip)
             local c = db.colors.Normal
             tooltip:AddDoubleLine(L["Status:"], L["Idle"], nil, nil, nil, c[1], c[2], c[3])
         end
-        if mmtargets[self.guid] then
-            tooltip:AddDoubleLine(L["MagicMarker Assignment:"], mmtargets[self.guid].cc, nil, nil, nil, 1, 1, 1)
-        end
-        if tti.cc then
-            tooltip:AddDoubleLine(L["Crowd Control:"], tti.cc, nil, nil, nil, 1, 1, 1)
-        end
         tooltip:AddLine(" ")
-        if next(tti.targets) then
-            local sorted = mod.get()
-            if db.showNotTargetedBy then
-                tooltip:AddLine(L["Not targeted by:"], 0.85, 0.85, 0.1);
-                for id in pairs(ingroup) do
-                    if not tti.targets[id] then
-                        if db.filterTargetRoles then
-                            local role = mod:UnitRole(id)
-                            if role ~= "tank" and role ~= "healer" then
-                                sorted[#sorted + 1] = id
-                            end
-                        else
-                            sorted[#sorted + 1] = id
-                        end
-                    end
-                end
-            else
-                tooltip:AddLine(L["Currently targeted by:"], 0.85, 0.85, 0.1);
-                for id in pairs(tti.targets) do
-                    sorted[#sorted + 1] = id
-                end
-            end
-            sort(sorted)
-            if db.coloredNames then
-                for id, name in ipairs(sorted) do
-                    sorted[id] = coloredNames[name]
-                end
-            end
-            tooltip:AddLine(tconcat(sorted, ", "), 1, 1, 1, 1)
-            mod.del(sorted)
-        else
-            tooltip:AddLine(L["Not targeted by anyone."]);
-        end
     else
         if tti and tti.name then
             tooltip:AddLine(tti.name, 0.85, 0.85, 0.1)
@@ -667,22 +585,32 @@ local function Bar_OnLeave(frame)
 end
 
 function mod:UNIT_HEALTH(event, unit)
-    local guid = UnitGUID(unit)
-    local frame = mod.unitbars[guid]
+    local frame = mod.unitbars[unit]
     if not frame then
         return
     end
-    local tti = tooltipInfo[guid]
+    local tti = tooltipInfo[unit]
     local uh, uhm = UnitHealth(unit), UnitHealthMax(unit)
 
     if tti then
         tti.health = uh
         tti.maxhealth = uhm
-        tti["%"] = ceil(100 * uh / uhm)
+        tti["%"] = fmt("%.0f", UnitHealthPercent(unit, false, CurveConstants.ScaleTo100))
     end
 
-    if frame.bar.value ~= uh or frame.bar.maxvalue ~= uhm then
-        frame.bar:SetValue(uh, uhm)
+    frame.bar:SetValue(uh, uhm)
+    mod:SetBarStrings(frame)
+end
+
+function mod:NAME_PLATE_UNIT_ADDED(event, unitToken)
+    if UnitExists(unitToken) then
+        self:UpdateBar(unitToken)
+    end
+end
+
+function mod:NAME_PLATE_UNIT_REMOVED(event, unitToken)
+    if UnitExists(unitToken) then
+        seen[unitToken] = time()
     end
 end
 
@@ -690,89 +618,74 @@ function mod:UpdateBar(target, targetedBy)
     if not UnitExists(target) or mod.testbars then
         return
     end
-    if target == "mouseover" then
-        targetedBy = nil
-    end
 
-    local guid = UnitGUID(target)
-    -- Add to the people targeting this particular unit
-    if updated[guid] then
-        if targetedBy then
-            local tti = tooltipInfo[guid]
-            if tti and not tti.targets[targetedBy] then
-                tti.targets[targetedBy] = true
-                updated[guid] = updated[guid] + 1
-            end
-        end
-        return
-    elseif trivial[guid] or died[guid] then
+    if trivial[target] or died[target] then
         return
     end
 
     local type = UnitCreatureType(target)
     local unitname = UnitName(target)
-    if UnitCanAttack("player", target) and not UnitIsDead(target) and not ingroup[unitname] and not UnitPlayerControlled(target) then
-        -- and not UnitIsPlayer(target) then
-        if type == L["Critter"] or type == L["Totem"] or (db.eliteonly and UnitClassification(target) == "normal") then
-            trivial[guid] = true
-            self:RemoveBar(guid)
+    -- Can't use unitname as table key since it's a secret value
+    -- Instead check if target is player-controlled or a player
+    -- Only show nameplates that are in combat (but always show focus and target)
+    local isNameplate = string.match(target, "^nameplate")
+    local isMyTarget = isNameplate and UnitIsUnit("target", target)
+    local isMyFocus = isNameplate and UnitIsUnit("focus", target)
+    local showUnit = not isNameplate or UnitAffectingCombat(target) or isMyTarget or isMyFocus
+    if UnitCanAttack("player", target) and not UnitIsDead(target) and not UnitIsPlayer(target) and not UnitPlayerControlled(target) and showUnit then
+        if UnitIsTrivial(target) or (db.eliteonly and UnitClassification(target) == "normal") then
+            trivial[target] = true
+            self:RemoveBar(target)
             return
         end
-        local frame = mod.unitbars[guid]
+        local frame = mod.unitbars[target]
         local mark = GetRaidTargetIndex(target)
         local uh, uhm = UnitHealth(target), UnitHealthMax(target)
         if not frame then
-            frame = self:CreateBar(guid, uh, uhm)
+            frame = self:CreateBar(target, uh, uhm)
             frame:SetColor("Normal")
         else
             frame.bar:SetValue(uh, uhm)
         end
         mod:SetIcon(frame, mark)
-        local targettarget = target .. "target"
 
-        if UnitExists(targettarget) and not UnitCanAttack("player", targettarget) and
-                not UnitIsDead(targettarget) and UnitIsPlayer(targettarget) then
-            tanked[guid] = mod:IsTank(targettarget)
-        end
+        -- Check if this unit is being tanked
+        tanked[target] = mod:IsTanked(target)
 
-        if mmtargets[guid] then
-            if not inCombat then
-                frame:SetColor(mmtargets[guid].cc)
-            end
-            mmtargets[guid].mark = mark
-        end
+        local tti = tooltipInfo[target] or mod.get()
+        tooltipInfo[target] = tti
 
-        local tti = tooltipInfo[guid] or mod.get()
-        tooltipInfo[guid] = tti
-
-        if tti.targets then
-            mod.clear(tti.targets)
-        else
+        if not tti.targets then
             tti.targets = mod.get()
         end
 
-        if targetedBy then
-            updated[guid] = 1
-            tti.targets[targetedBy] = true
+        -- Get threat information - nameplates support UnitDetailedThreatSituation
+        local isTanking, status, threatPct, rawPct = UnitDetailedThreatSituation("player", target)
+        if threatPct then
+            tti.threat = ceil(threatPct)
         else
-            updated[guid] = 0
+            tti.threat = 0
         end
-        if isClassic then
-            tti.threat = 0 -- TODO - use threat meter?
-        else
-            local _, _, scaledPercent = UnitDetailedThreatSituation("Player", target)
-            tti.threat = ceil(scaledPercent or 0)
-        end
+        print(target.." threat is ", UnitDetailedThreatSituation("player", target))
+
+        local targettarget = target .. "target"
         local tn = UnitName(targettarget)
+
+        -- Check if this unit is crowd controlled (has no target and is in combat)
+        if UnitAffectingCombat(target) and not UnitExists(targettarget) then
+            crowdControlled[target] = true
+        else
+            crowdControlled[target] = false
+        end
         tti.name = unitname
-        tti.target = tn and db.coloredNames and coloredNames[tn] or tn
+        tti.target = tn
         tti.type = type
         tti.level = UnitLevel(target)
         tti.health = uh
         tti.maxhealth = uhm
-        tti["%"] = ceil(100 * uh / uhm)
+        tti["%"] = fmt("%.0f", UnitHealthPercent(target, false, CurveConstants.ScaleTo100))
 
-        seen[guid] = time() + 4
+        seen[target] = time() + 4
         if target == "mouseover" then
             mod:SortBars()
             mod:SetBarStrings(frame)
@@ -787,71 +700,53 @@ function mod:UpdateBars()
     end
     inCombat = InCombatLockdown()
 
-    mod.clear(updated)
-    mod.clear(unitTanks)
     mod.clear(tanked)
+    mod.clear(crowdControlled)
 
-    -- Make bars for MagicMarker assignments
-    for id, data in pairs(mmtargets) do
-        if not died[id] then
-            local bar = mod.unitbars[id] or self:CreateBar(id, 100, 100)
-            mod:SetIcon(bar, data.mark)
+    -- Clear all targeting information before rebuilding
+    for _, tti in pairs(tooltipInfo) do
+        if tti.targets then
+            mod.clear(tti.targets)
         end
     end
-    -- Update raid targeting information, adding bars as necessary
-    for name, target in pairs(ingroup) do
-        self:UpdateBar(target, name)
+
+    -- Scan nameplates for enemy units
+    local nameplates = C_NamePlate.GetNamePlates()
+    for _, nameplateFrame in ipairs(nameplates) do
+        local unitToken = nameplateFrame.unitToken
+        if unitToken and UnitExists(unitToken) then
+            self:UpdateBar(unitToken)
+        end
     end
-    -- If we have a pet, let's see what he's targeting
-    self:UpdateBar("pettarget")
 
     if next(mod.unitbars) then
         -- This updates the list of "seen" mobs. Bars for mobs not seen for a while
         -- are removed.
         for id, seenTime in pairs(seen) do
-            if seenTime < tt then
-                local frame = mod.unitbars[id]
-                if frame and mmtargets[id] then
-                    if not inCombat then
-                        frame.bar:SetValue(frame.bar.maxValue or 100)
-                        frame:SetColor(mmtargets[id].cc)
-                        seen[id] = nil
-                    end
-                elseif not mobspells[id] or not inCombat then
-                    seen[id] = nil -- only remove them if not in combat or if not cc'd
-                end
+            if seenTime < tt and not inCombat then
+                seen[id] = nil
             end
         end
 
-        -- Update crowd control info, recycle non-needed bars etc
+        -- Update bar colors and recycle non-needed bars
         for id, frame in pairs(mod.unitbars) do
-            if updated[id] or mmtargets[id] or seen[id] then
+            -- Check if unit still exists and is not dead
+            local unitExists = UnitExists(id)
+            local isDead = unitExists and UnitIsDead(id)
+
+            -- Remove bar if unit is dead or doesn't exist
+            if isDead or not unitExists then
+                self:RemoveBar(id)
+            elseif seen[id] then
                 -- We're keeping this one
-                if mobspells[id] then
-                    -- Build crowd control info for this mob
-                    if db.showDuration then
-                        ccstrings[id] = nil
-                    end
-                    if not ccstrings[id] then
-                        local str = " "
-                        local timeLeft = 0
-                        for _, tex in pairs(mobspells[id]) do
-                            local spellTimeLeft = tex.expiration - tt
-                            if spellTimeLeft > timeLeft then
-                                timeLeft = spellTimeLeft
-                            end
-                            str = fmt("%s|T%s:0|t", tostring(str), tostring(tex.icon))
-                        end
-                        if timeLeft > 0 and db.showDuration then
-                            str = fmt("%s %.0f", str, timeLeft)
-                        end
-                        ccstrings[id] = str
-                    end
-                    frame:SetColor("CC")
-                elseif inCombat then
+                if inCombat then
                     -- Update bar colors based on mob status
                     if isInGroup then
-                        if tanked[id] == nil then
+                        local unitName = UnitName(id)
+                        -- Check CC status first (highest priority)
+                        if crowdControlled[id] then
+                            frame:SetColor("CC")
+                        elseif tanked[id] == nil then
                             frame:SetColor("Normal")
                         elseif tanked[id] then
                             frame:SetColor("Tank")
@@ -859,17 +754,13 @@ function mod:UpdateBars()
                             frame:SetColor("Notank")
                         end
                     else
-                        frame:SetColor("Tank")
+                        -- When solo, still check for CC
+                        if crowdControlled[id] then
+                            frame:SetColor("CC")
+                        else
+                            frame:SetColor("Tank")
+                        end
                     end
-                end
-
-                local tti = tooltipInfo[id]
-                if tti then
-                    if not updated[id] then
-                        -- This unit had no raid members targeting it
-                        mod.clear(tooltipInfo[id].targets)
-                    end
-                    tti.cc = ccstrings[id]
                 end
 
                 if frame.tooltipShowing then
@@ -886,9 +777,7 @@ function mod:UpdateBars()
         mod.clear(seen)
     end
     self:UpdateTarget("target", true)
-    if not isClassic then
-        self:UpdateTarget("focus", true)
-    end
+    self:UpdateTarget("focus", true)
     mod:SortBars()
 end
 
@@ -913,111 +802,6 @@ function mod:MoveIconTo(icon, frame, target)
     end
 end
 
-do
-    local raidtarget, partytarget
-    function mod:IterateRaid(callback, target, ...)
-        local id, name, class, map
-        if IsInRaid() then
-            --         if mod.debug then mod:debug("Scanning raid ") end
-
-            if target then
-                if not raidtarget then
-                    raidtarget = mod.get()
-                end
-                map = raidtarget
-            end
-            for id = 1, GetNumGroupMembers() do
-                local name = GetRaidRosterInfo(id)
-                if target then
-                    if not map[id] then
-                        map[id] = "raid" .. id .. (target and "target" or "")
-                    end
-
-                    --               if mod.debug then mod:debug("Raid id %d is %s or %s", id, name, map[id]) end
-
-                    callback(self, map[id], name, ...)
-                else
-                    callback(self, name, name, ...)
-                end
-            end
-        else
-            if GetNumGroupMembers() > 0 then
-                if not partytarget then
-                    partytarget = mod.get()
-                end
-                map = partytarget
-                for id = 1, GetNumGroupMembers() - 1 do
-                    if not map[id] then
-                        map[id] = "party" .. id
-                    end
-                    local name = UnitName(map[id])
-                    callback(self, (target and (map[id] .. "target")) or name, name, ...)
-                end
-            end
-            local name = UnitName("player")
-            callback(self, target and "target" or name, name, ...);
-        end
-    end
-end
-
-function mod:OnCommResetV2()
-    mod.clear(mmtargets)
-    if not InCombatLockdown() then
-        self:RemoveAllBars(true)
-    end
-    self:UpdateBars()
-end
-
-function mod:AddTooltipData(id, name)
-    local tti = tooltipInfo[id] or mod.get()
-    tooltipInfo[id] = tti
-    tti.targets = tti.targets or mod.get()
-    tti.name = name
-    tti.level = tti.level or 0
-    tti.type = tti.type or "Unknown"
-    tti["%"] = tti["%"] or 100
-    mod:SetBarStrings(mod.unitbars[id])
-end
-
-function mod:OnAssignData(data)
-    mmtargets = data
-    self:UpdateBars()
-    for id, data in pairs(mmtargets) do
-        if mod.unitbars[id] then
-            mod.unitbars[id]:SetColor(data.cc)
-            mod:AddTooltipData(id, data.name)
-        end
-    end
-end
-
-function mod:OnCommMarkV2(mark, guid, _, name)
-    if not name then
-        return
-    end
-    if not mmtargets[guid] then
-        mmtargets[guid] = mod.get()
-        mod:AddTooltipData(guid, name)
-    end
-    for id, frame in pairs(mod.unitbars) do
-        if id ~= guid and frame.mark == mark then
-            mod:SetIcon(frame.bar)
-            if mmtargets[id] then
-                mmtargets[id].mark = nil
-            end
-        end
-    end
-    mmtargets[guid].name = name
-    mmtargets[guid].mark = mark
-    self:UpdateBars()
-end
-
-function mod:OnCommUnmarkV2(guid, mark)
-    if mmtargets[guid] then
-        mod.del(mmtargets, guid)
-    end
-    self:UpdateBars()
-end
-
 local repeatTimer
 
 function mod:PLAYER_REGEN_ENABLED()
@@ -1036,8 +820,6 @@ end
 
 function mod:ClearCombatData()
     mod.clear(died)
-    mod.clear(ccstrings)
-    mod.clear(mobspells)
     mod.clear(trivial)
 end
 
@@ -1053,96 +835,6 @@ function mod:PLAYER_REGEN_DISABLED()
     end
 end
 
-local bit_band = bit.band
-local sub = string.sub
-local COMBATLOG_OBJECT_AFFILIATION_MINE,
-COMBATLOG_OBJECT_AFFILIATION_PARTY,
-COMBATLOG_OBJECT_AFFILIATION_RAID,
-COMBATLOG_OBJECT_REACTION_FRIENDLY,
-COMBATLOG_OBJECT_TYPE_GUARDIAN,
-COMBATLOG_OBJECT_TYPE_NPC,
-COMBATLOG_OBJECT_TYPE_PET,
-COMBATLOG_OBJECT_TYPE_PLAYER = COMBATLOG_OBJECT_AFFILIATION_MINE,
-COMBATLOG_OBJECT_AFFILIATION_PARTY,
-COMBATLOG_OBJECT_AFFILIATION_RAID,
-COMBATLOG_OBJECT_REACTION_FRIENDLY,
-COMBATLOG_OBJECT_TYPE_GUARDIAN,
-COMBATLOG_OBJECT_TYPE_NPC,
-COMBATLOG_OBJECT_TYPE_PET,
-COMBATLOG_OBJECT_TYPE_PLAYER
-
-local function GetFlagInfo(flags)
-    return
-    bit_band(flags, COMBATLOG_OBJECT_AFFILIATION_MINE + COMBATLOG_OBJECT_AFFILIATION_PARTY + COMBATLOG_OBJECT_AFFILIATION_RAID) ~= 0, -- in group
-    bit_band(flags, COMBATLOG_OBJECT_TYPE_PLAYER) == COMBATLOG_OBJECT_TYPE_PLAYER, -- is player
-    bit_band(flags, COMBATLOG_OBJECT_REACTION_FRIENDLY) ~= 0 -- is friendly
-end
-
-function mod:COMBAT_LOG_EVENT_UNFILTERED()
-    local tt, event, hideCaster, sguid, sname, sflags, srflags, tguid, tname, tflags, drflags, spellid, spellname = CombatLogGetCurrentEventInfo()
-    --   mod:debug("EVENT: %s, sflags: %d, tflags: %d", event, sflags, tflags)
-    if type(srflags) == "string" then
-        -- 4.1 compatibility
-        spellname = drflags
-        spellid = tflags
-        tflags = tname
-        tname = tguid
-        tguid = srflags
-    end
-
-    local sinGroup, sisPlayer, sisFriend = GetFlagInfo(sflags)
-    local tinGroup, tisPlayer, tisFriend = GetFlagInfo(tflags)
-
-    local sispet = bit_band(sflags, COMBATLOG_OBJECT_TYPE_PET + COMBATLOG_OBJECT_TYPE_GUARDIAN) ~= 0
-    local sisnpc = bit_band(sflags, COMBATLOG_OBJECT_TYPE_NPC) == COMBATLOG_OBJECT_TYPE_NPC
-
-    local tispet = bit_band(tflags, COMBATLOG_OBJECT_TYPE_PET + COMBATLOG_OBJECT_TYPE_GUARDIAN) ~= 0
-    local tisnpc = bit_band(tflags, COMBATLOG_OBJECT_TYPE_NPC) == COMBATLOG_OBJECT_TYPE_NPC
-
-    local sisfriend = (sinGroup and not sispet) or (sisPlayer and sisFriend)
-    local tisfriend = (tinGroup and not tispet) or (tisPlayer and tisFriend)
-
-
-    -- This stuff here is meant to detect new mobs we're engaged with.
-    if sisfriend and (tisnpc and not tispet) then
-        if tguid and tname and sname and ingroup[sname] then
-            seen[tguid] = tt + 4
-        end
-    elseif tisfriend and (sisnpc and not sispet) then
-        if sguid and sname and tname and ingroup[tname] then
-            seen[sguid] = tt + 4
-        end
-    end
-
-    if event == "UNIT_DIED" or event == "PARTY_KILL" or event == "UNIT_DESTROYED" then
-        died[tguid] = true
-        mod:RemoveBar(tguid)
-        mod:SortBars();
-    elseif event == "SPELL_AURA_APPLIED" or event == "SPELL_AURA_REFRESH" then
-        -- record crowd control
-        local spellData = ccspells[spellid]
-        if spellData then
-            local cc = mobspells[tguid] or mod.get()
-            cc[spellid] = cc[spellid] or mod.get()
-            mobspells[tguid] = cc
-            ccstrings[tguid] = nil
-            --	 if mod.debug then mod: debug("Spell %d has duration %s and will expire at %d\n",
-            --				      spellid, tostring(spellData[1]),
-            --				      tonumber(spellData[1])+tonumber(tt)) end
-            cc[spellid].expiration = tt + spellData[1] - 1
-            cc[spellid].icon = spellData[2]
-        end
-    elseif event == "SPELL_AURA_REMOVED" or event == "SPELL_AURA_BROKEN" then
-        local cc = mobspells[tguid]
-        if cc and cc[spellid] then
-            cc[spellid] = nil
-            ccstrings[tguid] = nil
-            if not next(cc) then
-                mod.del(mobspells, tguid)
-            end
-        end
-    end
-end
 
 
 -- Config option handling below
@@ -1325,32 +1017,6 @@ mod.options = {
                 end,
                 order = 200,
             },
-            showNotTargetedBy = {
-                type = "toggle",
-                name = L["Show who's not targeting a mob in the tooltip."],
-                desc = L["When enabled, all party or raid members not targeting the mob will be shown in the tooltip. Otherwise people targeting the mob will be shown."],
-                width = "full",
-                disabled = function()
-                    return not db.showTooltip
-                end,
-                order = 300,
-            },
-            filterTargetRoles = {
-                type = "toggle",
-                name = L["Filter tanks and healers from the not targeted by list."],
-                desc = L["If enabled, tanks and healers will not be shown in the list of players not targeting the mob in the mouseover tooltip. Usually you don't care whether or not they do."],
-                width = "full",
-                disabled = function()
-                    return not db.showNotTargetedBy or not db.showTooltip
-                end,
-                order = 400,
-            },
-            showDuration = {
-                type = "toggle",
-                width = "full",
-                name = L["Show crowd control duration on bars"],
-                desc = L["When enabled, the estimated duration of crowd control spells will be shown on the bars. Note that due to lack of REFRESH events, the addon will not notice if a crowd control spell is reapplied before the previous one expires."],
-            },
             focus = {
                 type = "toggle",
                 name = L["Show Focus Marker"],
@@ -1411,25 +1077,6 @@ mod.options = {
                     mod:FixAnchorVisibility()
                     if mod.hasInfo then
                         mod:info(L["The anchor will be %s when the bars are locked."], db.hideanchor and "hidden" or "shown")
-                    end
-                end,
-            },
-            mmlisten = {
-                type = "toggle",
-                name = L["Listen to Magic Marker target assignments."],
-                width = "full",
-                set = function()
-                    db.mmlisten = not db.mmlisten
-                    if db.mmlisten then
-                        comm:RegisterListener(mod, "MM", true)
-                        if mod.hasInfo then
-                            mod:info(L["Listening to Magic Marker comm events."])
-                        end
-                    else
-                        if mod.hasInfo then
-                            mod:info(L["Not listening to Magic Marker comm events."])
-                        end
-                        comm:UnregisterListener(mod, "MM")
                     end
                 end,
             },
@@ -1543,8 +1190,6 @@ mod.options = {
                         L["[maxhealth] - the units maximum health.\n"] ..
                         L["[target] - the name of the units target.\n"] ..
                         L["[type] - unit type (beast, elemental etc).\n"] ..
-                        L["[cc] - information indicating type and duration of active crowd control methods on the unit.\n"] ..
-                        L["[count] - number of players targeting the unit."] ..
                         L["[threat] - unit threat level relative to you."]
             ,
             },
@@ -1599,10 +1244,6 @@ mod.options = {
         }
     }
 }
-
-if isClassic then
-    mod.options.general.args.focus = nil
-end
 
 function mod:OptReg(optname, tbl, dispname, cmd)
     if dispname then
@@ -1737,12 +1378,8 @@ function mod:SortBars()
     local anchor
     local lbs = mod:GetLabelData()
     tsort(mod.bars, function(f1, f2)
-        local a, b = (f1.bar.value / f1.bar.maxValue), (f2.bar.value / f2.bar.maxValue)
-        if a == b then
-            return f1.guid > f2.guid
-        else
-            return a > b
-        end
+        -- Sort by unitToken only - can't compare health percentages (secret values)
+        return f1.unitToken > f2.unitToken
     end)
     local start = 0
     if #mod.bars > db.maxbars then
@@ -2034,16 +1671,12 @@ do
             return
         end
         local color = db.colors[cc] or db.colors["CC"]
-        if db.fadebars then
-            local fade = 0.5 + 0.5 * (bar.value / bar.maxValue)
-            bar:SetColor(color[1] * fade, color[2] * fade, color[3] * fade, color[4])
-        else
-            bar:SetColor(color[1], color[2], color[3], color[4])
-        end
+        -- Fadebars disabled - can't do arithmetic with secret health values
+        bar:SetColor(color[1], color[2], color[3], color[4])
         frame.color = cc
     end
 
-    function mod:CreateBar(guid, current, maxVal)
+    function mod:CreateBar(unitToken, current, maxVal)
         local lbs = mod:GetLabelData()
         local frame = tremove(mod.recycledFrames) or CreateFrame("Frame", nil, mod.frame)
         if frame.bar then
@@ -2071,10 +1704,10 @@ do
         frame:RegisterForDrag("LeftButton")
         frame:EnableMouse(not db.locked or db.showTooltip)
 
-        frame.guid = guid
+        frame.unitToken = unitToken
 
         mod.bars[#mod.bars + 1] = frame
-        mod.unitbars[guid] = frame
+        mod.unitbars[unitToken] = frame
 
         mod:SetupBarLabels(frame)
         mod:SetTexture(frame)
@@ -2086,23 +1719,85 @@ end
 
 do
     local tokens = {
-        "%", "health", "target", "name", "type", "maxhealth", "cc", "count", "level", "threat"
+        "%", "health", "target", "name", "type", "maxhealth", "level", "count", "threat"
     }
     local function tokenize(str, values)
-        if strlen(str) > 2 then
-            for _, k in ipairs(tokens) do
-                str = gsub(str, "%[" .. k .. "%]", values[k] or "")
+        if strlen(str) <= 2 then
+            return str
+        end
+
+        local result = ""
+        local i = 1
+        local len = strlen(str)
+
+        while i <= len do
+            if strsub(str, i, i) == "[" then
+                -- Found potential token start
+                local found = false
+                for _, k in ipairs(tokens) do
+                    local tokenStr = "[" .. k .. "]"
+                    local tokenLen = strlen(tokenStr)
+                    if i + tokenLen - 1 <= len and strsub(str, i, i + tokenLen - 1) == tokenStr then
+                        -- Found matching token
+                        local val = values[k]
+                        if type(val) ~= "nil" then
+                            -- Use pcall to safely handle secret values
+                            local success, formatted = pcall(fmt, "%s", val)
+                            if success then
+                                result = result .. formatted
+                            end
+                            -- If pcall fails (secret value), skip this token silently
+                        end
+                        i = i + tokenLen
+                        found = true
+                        break
+                    end
+                end
+                if not found then
+                    -- Check if this is an unknown token [something]
+                    -- If so, skip it entirely (replace with empty string)
+                    local closeBracket = nil
+                    for j = i + 1, len do
+                        if strsub(str, j, j) == "]" then
+                            closeBracket = j
+                            break
+                        elseif strsub(str, j, j) == "[" then
+                            -- Found another [ before ], so this isn't a token
+                            break
+                        end
+                    end
+
+                    if closeBracket then
+                        -- Found matching ], skip the entire unknown token
+                        i = closeBracket + 1
+                    else
+                        -- Just a standalone [, keep it
+                        result = result .. "["
+                        i = i + 1
+                    end
+                end
+            else
+                -- Regular character
+                result = result .. strsub(str, i, i)
+                i = i + 1
             end
         end
-        return str
+
+        return result
     end
 
     function mod:SetBarStrings(frame)
-        local tti = tooltipInfo[frame.guid]
+        local tti = tooltipInfo[frame.unitToken]
         if tti then
+            -- Calculate count of players targeting this unit
             if not mod.testBars then
-                local count = updated[frame.guid]
-                tti.count = count and count > 0 and count or nil
+                local count = 0
+                if tti.targets then
+                    for _ in pairs(tti.targets) do
+                        count = count + 1
+                    end
+                end
+                tti.count = count > 0 and count or nil
             end
             for id, data in ipairs(mod:GetLabelData().labels) do
                 frame.labels[id]:SetText(tokenize(data.text, tti))
@@ -2132,9 +1827,6 @@ do
             tti.name = testNames[rnd(#testNames)]
             tti.level = 10 + rnd(80)
             tti.type = "Animal"
-            if rnd(3) == 1 then
-                tti.count = rnd(12)
-            end
             tti.targets = mod.get()
             if rnd(3) == 1 then
                 tti.target = UnitName("player")
@@ -2144,9 +1836,6 @@ do
             tti.threat = ceil(10 + rnd(90))
             tti["%"] = ceil(100 * tti.health / tti.maxhealth)
             tooltipInfo[tostring(id)] = tti
-            if rnd(5) == 1 then
-                tti.cc = "<SH> 10"
-            end
             local frame = mod:CreateBar(tostring(id), tti.health, tti.maxhealth)
             mod:SetBarStrings(frame)
             if rnd(5) == 1 then
