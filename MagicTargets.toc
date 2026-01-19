@@ -8,6 +8,7 @@
 ## Author: NeoTron
 ## Version: @project-version@
 ## DefaultState: enabled
+## IconTexture: Interface\AddOns\MagicTargets\target
 ## X-Category: Raid
 ## X-eMail: neotron@gmail.com
 
