@@ -666,7 +666,8 @@ function mod:UpdateBar(target, targetedBy)
         -- Get threat information - nameplates support UnitDetailedThreatSituation
         local isTanking, status, threatPct, rawPct = UnitDetailedThreatSituation("player", target)
         if threatPct then
-            tti.threat = ceil(threatPct)
+            local ok, val = pcall(ceil, threatPct)
+            tti.threat = ok and val or threatPct
         else
             tti.threat = 0
         end
