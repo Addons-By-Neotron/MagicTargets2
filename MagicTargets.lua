@@ -619,7 +619,7 @@ function mod:NAME_PLATE_UNIT_REMOVED(event, unitToken)
 end
 
 function mod:UpdateBar(target, targetedBy)
-    if not UnitExists(target) or mod.testbars then
+    if not UnitExists(target) or mod.testBars then
         return
     end
 
