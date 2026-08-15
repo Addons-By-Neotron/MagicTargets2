@@ -308,12 +308,14 @@ end
 -- Check if a unit is assigned as a tank
 function mod:IsTank(unit)
     -- Check if unit has TANK role assigned
-    if UnitGroupRolesAssigned(unit) == "TANK" then
+    local role = UnitGroupRolesAssigned(unit)
+    if not issecretvalue(role) and role == "TANK" then
         return true
     end
 
     -- Check if unit is assigned as main tank in raid
-    if GetPartyAssignment("MAINTANK", unit) then
+    local isMainTank = GetPartyAssignment("MAINTANK", unit)
+    if not issecretvalue(isMainTank) and isMainTank then
         return true
     end
 
@@ -342,9 +344,9 @@ function mod:UnitRole(unit, specOnly)
         return "tank"
     end
     local role = UnitGroupRolesAssigned(unit)
-    if role == "TANK" then
+    if not issecretvalue(role) and role == "TANK" then
         return "tank"
-    elseif role == "HEALER" then
+    elseif not issecretvalue(role) and role == "HEALER" then
         return "healer"
     else
         if LGT then
