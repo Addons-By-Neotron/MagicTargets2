@@ -1,4 +1,4 @@
-## Interface: 120100
+## Interface: 120100, 120105
 ## X-Curse-Project-ID: 14365
 ## X-WoWI-ID: 9098
 ## X-Wago-ID: pkNMEqNz
