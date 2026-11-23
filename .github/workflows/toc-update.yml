@@ -7,9 +7,6 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    env:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
-      WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
     steps:
       - name: Clone project
         uses: actions/checkout@v7
@@ -18,7 +15,7 @@ jobs:
         with:
           beta: true
           ptr: true
-          flavor:
+          flavor: |
             retail
             forever
       - name: Create pull request
@@ -27,4 +24,29 @@ jobs:
           title: Update Interface version
           commit-message: Update Interface version
           branch: interface-version
+          delete-branch: true
+
+  # The legacy branch (Classic flavors): scheduled workflows only run from the
+  # default branch, so its update lives here.
+  legacy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone legacy branch
+        uses: actions/checkout@v7
+        with:
+          ref: legacy
+      - name: Update TOC Interface version
+        uses: p3lim/toc-interface-updater@v4
+        with:
+          flavor: |
+            vanilla
+            tbc
+            mists
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          base: legacy
+          title: Update Interface version (legacy)
+          commit-message: Update Interface version
+          branch: interface-version-legacy
           delete-branch: true
